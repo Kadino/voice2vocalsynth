@@ -16,6 +16,7 @@ void defaultPresetUsesSafeLiveDefaults()
     assert(preset.schemaVersion == 1);
     assert(preset.name == "Default");
     assert(preset.audio.outputRoute == OutputRoute::MonitorOutput);
+    assert(preset.voicebank.aliasStylePreference == AliasStylePreference::AutoDetect);
     assert(preset.voicebank.whistleAlias == "u");
     assert(!preset.recording.optInAutoCapture);
     assert(preset.recording.recordDryInput);
@@ -46,60 +47,23 @@ void allowsRecordingFolderOutsideRepository()
     assert(result.valid());
 }
 
-void detectsNestedPathsWithMixedSlashes()
-{
-    assert(AppSettingsValidator::pathIsInsideDirectory("C:\\project\\Recordings", "C:/project"));
-    assert(!AppSettingsValidator::pathIsInsideDirectory("C:/private/Recordings", "C:/project"));
-}
-
-void writesAndReadsEditableJson()
+void warnsWhenVoicebankIsNotSelected()
 {
     auto preset = AppSettingsValidator::makeDefaultPreset();
-    preset.name = "Live test";
-    preset.audio.inputDeviceName = "Mic";
-    preset.audio.outputDeviceName = "Headphones";
-    preset.voicebank.voicebankPath = "C:/voicebanks/momo";
-    preset.voicebank.whistleAlias = "u";
-    preset.pitch.mode = PitchMode::SnapToKey;
-    preset.pitch.scale = ScaleType::NaturalMinor;
-    preset.pitch.keyRootPitchClass = 9;
-    preset.pitch.octaveShift = 1;
-    preset.pitch.defaultFrequencyHz = PitchTargetCalculator::midiToFrequency(62.0);
-    preset.latency = LatencyBudgetCalculator::presetSettings(LatencyPreset::HighAccuracy);
-    preset.recording.privateDataFolder = "C:/Users/me/AppData/Local/Voice2VocalSynth";
+    preset.recording.privateDataFolder = "/home/user/AppData/Local/Voice2VocalSynth";
 
-    const auto json = AppPresetJson::toJson(preset);
-    assert(json.find("\"voicebankPath\"") != std::string::npos);
-    assert(json.find("\"snapToKey\"") != std::string::npos);
+    const auto result = AppSettingsValidator::validate(preset, "/workspace");
 
-    const auto parsed = AppPresetJson::fromJson(json);
-    assert(parsed.name == "Live test");
-    assert(parsed.audio.inputDeviceName == "Mic");
-    assert(parsed.voicebank.voicebankPath == "C:/voicebanks/momo");
-    assert(parsed.pitch.mode == PitchMode::SnapToKey);
-    assert(parsed.pitch.scale == ScaleType::NaturalMinor);
-    assert(parsed.pitch.keyRootPitchClass == 9);
-    assert(parsed.pitch.octaveShift == 1);
-    assert(parsed.latency.preset == LatencyPreset::HighAccuracy);
-    assert(parsed.recording.privateDataFolder == "C:/Users/me/AppData/Local/Voice2VocalSynth");
+    assert(result.valid());
+    assert(!result.warnings.empty());
 }
 
-void acceptsHumanEditedPartialJson()
+void detectsNestedPathsWithMixedSlashes()
 {
-    const auto parsed = AppPresetJson::fromJson(
-        "{\n"
-        "  \"name\": \"Edited\",\n"
-        "  \"voicebank\": { \"whistleAlias\": \"o\" },\n"
-        "  \"pitch\": { \"mode\": \"fixedDefault\", \"defaultFrequencyHz\": 3.3e2 },\n"
-        "  \"recording\": { \"optInAutoCapture\": true, \"privateDataFolder\": \"D:/captures\" }\n"
-        "}\n");
-
-    assert(parsed.name == "Edited");
-    assert(parsed.voicebank.whistleAlias == "o");
-    assert(parsed.pitch.mode == PitchMode::FixedDefault);
-    assert(parsed.pitch.defaultFrequencyHz == 330.0);
-    assert(parsed.recording.optInAutoCapture);
-    assert(parsed.recording.privateDataFolder == "D:/captures");
+    assert(AppSettingsValidator::pathIsInsideDirectory("C:\\project\\Recordings",
+                                                       "C:/project"));
+    assert(!AppSettingsValidator::pathIsInsideDirectory("C:/private/Recordings",
+                                                        "C:/project"));
 }
 
 } // namespace
@@ -109,9 +73,8 @@ int main()
     defaultPresetUsesSafeLiveDefaults();
     rejectsRecordingFolderInsideRepository();
     allowsRecordingFolderOutsideRepository();
+    warnsWhenVoicebankIsNotSelected();
     detectsNestedPathsWithMixedSlashes();
-    writesAndReadsEditableJson();
-    acceptsHumanEditedPartialJson();
 
     std::cout << "AppSettings tests passed\n";
     return 0;

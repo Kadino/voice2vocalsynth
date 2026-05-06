@@ -16,6 +16,13 @@ enum class OutputRoute
     ProjectVirtualMicrophone
 };
 
+enum class AliasStylePreference
+{
+    AutoDetect,
+    PreferRomaji,
+    PreferNonAscii
+};
+
 struct AudioRoutingSettings
 {
     std::string inputDeviceName;
@@ -27,6 +34,7 @@ struct VoicebankSettings
 {
     std::string voicebankPath;
     std::string mappingPath;
+    AliasStylePreference aliasStylePreference = AliasStylePreference::AutoDetect;
     bool allowMissingAliasFallback = true;
     std::string whistleAlias = "u";
 };

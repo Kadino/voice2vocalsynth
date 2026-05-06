@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <utility>
 #include <variant>
+#include <utility>
 
 namespace Voice2VocalSynth
 {
@@ -514,6 +515,7 @@ AppPreset AppSettingsValidator::makeDefaultPreset()
     AppPreset preset;
     preset.name = "Default";
     preset.audio.outputRoute = OutputRoute::MonitorOutput;
+    preset.voicebank.aliasStylePreference = AliasStylePreference::AutoDetect;
     preset.voicebank.allowMissingAliasFallback = true;
     preset.voicebank.whistleAlias = "u";
     preset.latency = LatencyBudgetCalculator::presetSettings(LatencyPreset::Balanced);
