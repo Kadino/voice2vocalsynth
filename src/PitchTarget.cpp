@@ -124,33 +124,40 @@ PitchTarget PitchTargetCalculator::calculate(const PitchInput& input) const
         throw std::invalid_argument("defaultFrequencyHz must be positive and finite");
     }
 
-    auto workingFrequencyHz = choosePitchSourceFrequency(input, options_, target);
+    const auto workingFrequencyHz = choosePitchSourceFrequency(input, options_, target);
     auto workingMidi = frequencyToMidi(workingFrequencyHz);
 
-    switch (options_.mode) {
-        case PitchMode::FollowInput:
-            target.snapped = false;
-            break;
-        case PitchMode::SnapToNearestSemitone: {
-            const auto snappedMidi = snapMidiToNearestSemitone(workingMidi);
-            workingMidi += (snappedMidi - workingMidi) * clampSnapStrength(options_.snapStrength);
-            target.snapped = options_.snapStrength > 0.0;
-            break;
-        }
-        case PitchMode::SnapToKey: {
-            const auto snappedMidi = snapMidiToKey(workingMidi);
-            workingMidi += (snappedMidi - workingMidi) * clampSnapStrength(options_.snapStrength);
-            target.snapped = options_.snapStrength > 0.0;
-            break;
-        }
-        case PitchMode::FixedDefault:
-            workingMidi = frequencyToMidi(options_.defaultFrequencyHz);
-            target.usedDefaultPitch = true;
-            target.snapped = false;
-            break;
+    if (options_.mode == PitchMode::FixedDefault) {
+        workingMidi = frequencyToMidi(options_.defaultFrequencyHz);
+        target.usedDefaultPitch = true;
     }
 
-    workingMidi += static_cast<double>(options_.octaveShift) * 12.0;
+    if (!target.usedDefaultPitch) {
+        switch (options_.mode) {
+            case PitchMode::FollowInput:
+                target.snapped = false;
+                break;
+            case PitchMode::SnapToNearestSemitone: {
+                const auto snappedMidi = snapMidiToNearestSemitone(workingMidi);
+                workingMidi += (snappedMidi - workingMidi) * clampSnapStrength(options_.snapStrength);
+                target.snapped = options_.snapStrength > 0.0;
+                break;
+            }
+            case PitchMode::SnapToKey: {
+                const auto snappedMidi = snapMidiToKey(workingMidi);
+                workingMidi += (snappedMidi - workingMidi) * clampSnapStrength(options_.snapStrength);
+                target.snapped = options_.snapStrength > 0.0;
+                break;
+            }
+            case PitchMode::FixedDefault:
+                target.snapped = false;
+                break;
+        }
+
+        workingMidi += static_cast<double>(options_.octaveShift) * 12.0;
+    } else {
+        target.snapped = false;
+    }
 
     target.targetMidi = workingMidi;
     target.targetFrequencyHz = midiToFrequency(workingMidi);

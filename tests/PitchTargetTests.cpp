@@ -84,9 +84,9 @@ void usesFixedDefaultPitch()
     const auto target = calculator.calculate({440.0, 1.0});
 
     assert(target.usedDefaultPitch);
-    assert(target.displayMidiNote == 53);
-    assert(target.displayNoteName == "F3");
-    assert(nearlyEqual(target.targetFrequencyHz, PitchTargetCalculator::midiToFrequency(53.0)));
+    assert(target.displayMidiNote == 65);
+    assert(target.displayNoteName == "F4");
+    assert(nearlyEqual(target.targetFrequencyHz, PitchTargetCalculator::midiToFrequency(65.0)));
 }
 
 void lowConfidenceUsesRecentMean()
@@ -115,6 +115,7 @@ void whisperedLowConfidenceUsesVoicebankDefault()
     options.mode = PitchMode::FollowInput;
     options.defaultFrequencyHz = PitchTargetCalculator::midiToFrequency(60.0);
     options.minimumConfidence = 0.6;
+    options.octaveShift = 2;
     options.lowConfidenceBehavior = LowConfidencePitchBehavior::UseRecentMean;
     const PitchTargetCalculator calculator(options);
 
@@ -129,6 +130,28 @@ void whisperedLowConfidenceUsesVoicebankDefault()
     assert(target.usedDefaultPitch);
     assert(target.displayMidiNote == 60);
     assert(target.displayNoteName == "C4");
+}
+
+void lowConfidenceDefaultBypassesSnapAndOctaveShift()
+{
+    PitchTargetOptions options;
+    options.mode = PitchMode::SnapToNearestSemitone;
+    options.defaultFrequencyHz = PitchTargetCalculator::midiToFrequency(60.4);
+    options.minimumConfidence = 0.6;
+    options.octaveShift = 1;
+    options.lowConfidenceBehavior = LowConfidencePitchBehavior::UseDefaultPitch;
+    const PitchTargetCalculator calculator(options);
+
+    PitchInput input;
+    input.frequencyHz = PitchTargetCalculator::midiToFrequency(69.0);
+    input.confidence = 0.1;
+    const auto target = calculator.calculate(input);
+
+    assert(target.usedLowConfidenceFallback);
+    assert(target.usedDefaultPitch);
+    assert(!target.snapped);
+    assert(nearlyEqual(target.targetMidi, 60.4));
+    assert(nearlyEqual(target.targetFrequencyHz, PitchTargetCalculator::midiToFrequency(60.4)));
 }
 
 void snapStrengthBlendsInMidiSpace()
@@ -156,6 +179,7 @@ int main()
     usesFixedDefaultPitch();
     lowConfidenceUsesRecentMean();
     whisperedLowConfidenceUsesVoicebankDefault();
+    lowConfidenceDefaultBypassesSnapAndOctaveShift();
     snapStrengthBlendsInMidiSpace();
 
     std::cout << "PitchTarget tests passed\n";
