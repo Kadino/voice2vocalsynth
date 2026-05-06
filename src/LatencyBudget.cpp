@@ -139,18 +139,18 @@ std::string LatencyBudgetCalculator::presetName(LatencyPreset preset)
 {
     switch (preset) {
         case LatencyPreset::LowLatency:
-            return "lowLatency";
+            return "Low latency";
         case LatencyPreset::Balanced:
-            return "balanced";
+            return "Balanced";
         case LatencyPreset::HighAccuracy:
-            return "highAccuracy";
+            return "High accuracy";
         case LatencyPreset::ExperimentalLongLookahead:
-            return "experimentalLongLookahead";
+            return "Experimental long lookahead";
         case LatencyPreset::Custom:
-            return "custom";
+            return "Custom";
     }
 
-    return "custom";
+    return "Custom";
 }
 
 } // namespace Voice2VocalSynth

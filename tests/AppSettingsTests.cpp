@@ -46,6 +46,17 @@ void allowsRecordingFolderOutsideRepository()
     assert(result.valid());
 }
 
+void warnsWhenVoicebankIsNotSelected()
+{
+    auto preset = AppSettingsValidator::makeDefaultPreset();
+    preset.recording.privateDataFolder = "/home/user/AppData/Local/Voice2VocalSynth";
+
+    const auto result = AppSettingsValidator::validate(preset, "/workspace");
+
+    assert(result.valid());
+    assert(!result.warnings.empty());
+}
+
 void detectsNestedPathsWithMixedSlashes()
 {
     assert(AppSettingsValidator::pathIsInsideDirectory("C:\\project\\Recordings", "C:/project"));
@@ -109,6 +120,7 @@ int main()
     defaultPresetUsesSafeLiveDefaults();
     rejectsRecordingFolderInsideRepository();
     allowsRecordingFolderOutsideRepository();
+    warnsWhenVoicebankIsNotSelected();
     detectsNestedPathsWithMixedSlashes();
     writesAndReadsEditableJson();
     acceptsHumanEditedPartialJson();
