@@ -1,35 +1,20 @@
-# Prerequisites
-*.d
+# Local environment files
+.env
+.env.*
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
+# Dependency and build output
+build/
+dist/
+out/
+target/
+node_modules/
 
-# Precompiled Headers
-*.gch
-*.pch
+# Logs and temporary files
+*.log
+tmp/
+temp/
 
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
-*.exe
-*.out
-*.app
-
-# Common Build Folder
-build
+# Editor and OS metadata
+.DS_Store
+.idea/
+.vscode/
