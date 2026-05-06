@@ -20,6 +20,7 @@ The repository currently contains the first phoneme mapping slice:
 - Basic `oto.ini` parsing for UTAU voicebank aliases and timing fields.
 - Voicebank alias resolution that chooses the first available mapper candidate
   and reports missing candidates for UI/debug output.
+- Voicebank alias style is auto-detected from the loaded alias inventory.
 - Latency budget presets and end-to-end monitoring latency breakdowns for
   analysis, stabilization, render scheduling, and device latency.
 - App preset settings for audio routing, voicebank selection, pitch behavior,

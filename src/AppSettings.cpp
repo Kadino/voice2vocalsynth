@@ -88,19 +88,6 @@ const char* toJsonString(OutputRoute route)
     return "monitor";
 }
 
-const char* toJsonString(AliasStylePreference preference)
-{
-    switch (preference) {
-        case AliasStylePreference::AutoDetect:
-            return "auto";
-        case AliasStylePreference::PreferRomaji:
-            return "preferRomaji";
-        case AliasStylePreference::PreferNonAscii:
-            return "preferNonAscii";
-    }
-    return "auto";
-}
-
 const char* toJsonString(PitchMode mode)
 {
     switch (mode) {
@@ -310,21 +297,44 @@ private:
         if (peek('-')) {
             ++position_;
         }
+
+        const auto integerStart = position_;
         while (position_ < text_.size() && std::isdigit(static_cast<unsigned char>(text_[position_]))) {
             ++position_;
         }
+        const auto hasIntegerDigits = position_ > integerStart;
+
         if (peek('.')) {
             ++position_;
+            const auto fractionStart = position_;
             while (position_ < text_.size() && std::isdigit(static_cast<unsigned char>(text_[position_]))) {
                 ++position_;
+            }
+            if (position_ == fractionStart) {
+                throw std::invalid_argument("Invalid fractional number in preset JSON");
+            }
+        }
+
+        if (!hasIntegerDigits) {
+            throw std::invalid_argument("Invalid number in preset JSON");
+        }
+
+        if (peek('e') || peek('E')) {
+            ++position_;
+            if (peek('+') || peek('-')) {
+                ++position_;
+            }
+
+            const auto exponentStart = position_;
+            while (position_ < text_.size() && std::isdigit(static_cast<unsigned char>(text_[position_]))) {
+                ++position_;
+            }
+            if (position_ == exponentStart) {
+                throw std::invalid_argument("Invalid exponent in preset JSON");
             }
         }
 
         const auto token = std::string(text_.substr(start, position_ - start));
-        if (token.empty() || token == "-") {
-            throw std::invalid_argument("Invalid number in preset JSON");
-        }
-
         return std::stod(token);
     }
 
@@ -422,20 +432,6 @@ OutputRoute parseOutputRoute(const std::string& value, OutputRoute fallback)
     return fallback;
 }
 
-AliasStylePreference parseAliasStylePreference(const std::string& value, AliasStylePreference fallback)
-{
-    if (value == "auto") {
-        return AliasStylePreference::AutoDetect;
-    }
-    if (value == "preferRomaji") {
-        return AliasStylePreference::PreferRomaji;
-    }
-    if (value == "preferNonAscii") {
-        return AliasStylePreference::PreferNonAscii;
-    }
-    return fallback;
-}
-
 PitchMode parsePitchMode(const std::string& value, PitchMode fallback)
 {
     if (value == "followInput") {
@@ -518,7 +514,6 @@ AppPreset AppSettingsValidator::makeDefaultPreset()
     AppPreset preset;
     preset.name = "Default";
     preset.audio.outputRoute = OutputRoute::MonitorOutput;
-    preset.voicebank.aliasStylePreference = AliasStylePreference::AutoDetect;
     preset.voicebank.allowMissingAliasFallback = true;
     preset.voicebank.whistleAlias = "u";
     preset.latency = LatencyBudgetCalculator::presetSettings(LatencyPreset::Balanced);
@@ -606,7 +601,6 @@ std::string AppPresetJson::toJson(const AppPreset& preset)
     json << "  \"voicebank\": {\n";
     json << "    \"voicebankPath\": \"" << escapeJsonString(preset.voicebank.voicebankPath) << "\",\n";
     json << "    \"mappingPath\": \"" << escapeJsonString(preset.voicebank.mappingPath) << "\",\n";
-    json << "    \"aliasStylePreference\": \"" << toJsonString(preset.voicebank.aliasStylePreference) << "\",\n";
     json << "    \"allowMissingAliasFallback\": " << (preset.voicebank.allowMissingAliasFallback ? "true" : "false") << ",\n";
     json << "    \"whistleAlias\": \"" << escapeJsonString(preset.voicebank.whistleAlias) << "\"\n";
     json << "  },\n";
@@ -665,11 +659,6 @@ AppPreset AppPresetJson::fromJson(std::string_view jsonText)
     if (const auto* voicebank = childObject(*rootObject, "voicebank")) {
         preset.voicebank.voicebankPath = stringValue(*voicebank, "voicebankPath", preset.voicebank.voicebankPath);
         preset.voicebank.mappingPath = stringValue(*voicebank, "mappingPath", preset.voicebank.mappingPath);
-        preset.voicebank.aliasStylePreference = parseAliasStylePreference(
-            stringValue(*voicebank,
-                        "aliasStylePreference",
-                        toJsonString(preset.voicebank.aliasStylePreference)),
-            preset.voicebank.aliasStylePreference);
         preset.voicebank.allowMissingAliasFallback =
             boolValue(*voicebank, "allowMissingAliasFallback", preset.voicebank.allowMissingAliasFallback);
         preset.voicebank.whistleAlias = stringValue(*voicebank, "whistleAlias", preset.voicebank.whistleAlias);

@@ -16,7 +16,6 @@ void defaultPresetUsesSafeLiveDefaults()
     assert(preset.schemaVersion == 1);
     assert(preset.name == "Default");
     assert(preset.audio.outputRoute == OutputRoute::MonitorOutput);
-    assert(preset.voicebank.aliasStylePreference == AliasStylePreference::AutoDetect);
     assert(preset.voicebank.whistleAlias == "u");
     assert(!preset.recording.optInAutoCapture);
     assert(preset.recording.recordDryInput);
@@ -77,7 +76,6 @@ void writesAndReadsEditableJson()
     assert(parsed.name == "Live test");
     assert(parsed.audio.inputDeviceName == "Mic");
     assert(parsed.voicebank.voicebankPath == "C:/voicebanks/momo");
-    assert(parsed.voicebank.aliasStylePreference == AliasStylePreference::AutoDetect);
     assert(parsed.pitch.mode == PitchMode::SnapToKey);
     assert(parsed.pitch.scale == ScaleType::NaturalMinor);
     assert(parsed.pitch.keyRootPitchClass == 9);
@@ -91,14 +89,13 @@ void acceptsHumanEditedPartialJson()
     const auto parsed = AppPresetJson::fromJson(
         "{\n"
         "  \"name\": \"Edited\",\n"
-        "  \"voicebank\": { \"whistleAlias\": \"o\", \"aliasStylePreference\": \"auto\" },\n"
-        "  \"pitch\": { \"mode\": \"fixedDefault\", \"defaultFrequencyHz\": 330.0 },\n"
+        "  \"voicebank\": { \"whistleAlias\": \"o\" },\n"
+        "  \"pitch\": { \"mode\": \"fixedDefault\", \"defaultFrequencyHz\": 3.3e2 },\n"
         "  \"recording\": { \"optInAutoCapture\": true, \"privateDataFolder\": \"D:/captures\" }\n"
         "}\n");
 
     assert(parsed.name == "Edited");
     assert(parsed.voicebank.whistleAlias == "o");
-    assert(parsed.voicebank.aliasStylePreference == AliasStylePreference::AutoDetect);
     assert(parsed.pitch.mode == PitchMode::FixedDefault);
     assert(parsed.pitch.defaultFrequencyHz == 330.0);
     assert(parsed.recording.optInAutoCapture);
