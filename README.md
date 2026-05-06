@@ -23,6 +23,8 @@ The repository currently contains the first phoneme mapping slice:
 - Latency budget presets and end-to-end monitoring latency breakdowns for
   input device, analysis, stabilization, render scheduling, and output device
   delay.
+- App preset/settings models for audio routing, voicebank selection, pitch,
+  latency, and opt-in recording/debug capture paths.
 
 ## Build
 
