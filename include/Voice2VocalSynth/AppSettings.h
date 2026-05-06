@@ -4,6 +4,7 @@
 #include "Voice2VocalSynth/PitchTarget.h"
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace Voice2VocalSynth
@@ -52,6 +53,7 @@ struct RecordingSettings
 
 struct AppPreset
 {
+    int schemaVersion = 1;
     std::string name = "Default";
     AudioRoutingSettings audio;
     VoicebankSettings voicebank;
@@ -76,6 +78,13 @@ public:
     [[nodiscard]] static bool pathIsInsideDirectory(const std::string& path,
                                                     const std::string& directory);
     [[nodiscard]] static AppPreset makeDefaultPreset();
+};
+
+class AppPresetJson
+{
+public:
+    [[nodiscard]] static std::string toJson(const AppPreset& preset);
+    [[nodiscard]] static AppPreset fromJson(std::string_view json);
 };
 
 } // namespace Voice2VocalSynth

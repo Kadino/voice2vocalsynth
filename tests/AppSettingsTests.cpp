@@ -1,7 +1,9 @@
 #include <Voice2VocalSynth/AppSettings.h>
+#include <Voice2VocalSynth/PitchTarget.h>
 
 #include <cassert>
 #include <iostream>
+#include <string>
 
 namespace
 {
@@ -11,6 +13,7 @@ void defaultPresetUsesSafeLiveDefaults()
 {
     const auto preset = AppSettingsValidator::makeDefaultPreset();
 
+    assert(preset.schemaVersion == 1);
     assert(preset.name == "Default");
     assert(preset.audio.outputRoute == OutputRoute::MonitorOutput);
     assert(preset.voicebank.aliasStylePreference == AliasStylePreference::AutoDetect);
