@@ -1,6 +1,27 @@
-# New Project
+# Voice2VocalSynth
 
-This repository is ready for new project files.
+Voice2VocalSynth is a private Windows-focused C++ project for live
+voice-to-UTAU vocal synthesis experiments.
+
+## Current core module
+
+The repository currently contains the first phoneme mapping slice:
+
+- ARPABET phoneme normalization with stress digit stripping.
+- English phoneme to Japanese CV alias mapping.
+- Configurable consonant substitutions such as `TH`.
+- Partial CVC fallback for trailing consonants, e.g. `K AE T` maps to
+  `ka` plus a shortened final `to` alias.
+- Renderer hints for partial finals so later audio code can preserve the
+  consonant while attenuating the helper vowel tail.
+
+## Build
+
+```sh
+cmake -S . -B build
+cmake --build build
+ctest --test-dir build
+```
 
 ## License
 
