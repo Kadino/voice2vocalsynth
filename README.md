@@ -14,6 +14,9 @@ The repository currently contains the first phoneme mapping slice:
   `ka` plus a shortened final `to` alias.
 - Renderer hints for partial finals so later audio code can preserve the
   consonant while attenuating the helper vowel tail.
+- Basic `oto.ini` parsing for UTAU voicebank aliases and timing fields.
+- Voicebank alias resolution that chooses the first available mapper candidate
+  and reports missing candidates for UI/debug output.
 
 ## Build
 
