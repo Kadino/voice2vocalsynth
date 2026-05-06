@@ -9,7 +9,11 @@ option(VOICE2VOCALSYNTH_BUILD_TESTS "Build Voice2VocalSynth tests" ON)
 
 add_library(Voice2VocalSynthCore
     src/PhonemeFallbackMapper.cpp
+<<<<<<< cursor/pitch-target-4e15
     src/PitchTarget.cpp)
+=======
+    src/VoicebankAliasIndex.cpp)
+>>>>>>> main
 
 target_include_directories(Voice2VocalSynthCore
     PUBLIC
@@ -29,6 +33,7 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
 
     add_test(NAME PhonemeFallbackMapperTests COMMAND PhonemeFallbackMapperTests)
 
+<<<<<<< cursor/pitch-target-4e15
     add_executable(PitchTargetTests
         tests/PitchTargetTests.cpp)
 
@@ -37,4 +42,14 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
             Voice2VocalSynthCore)
 
     add_test(NAME PitchTargetTests COMMAND PitchTargetTests)
+=======
+    add_executable(VoicebankAliasIndexTests
+        tests/VoicebankAliasIndexTests.cpp)
+
+    target_link_libraries(VoicebankAliasIndexTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    add_test(NAME VoicebankAliasIndexTests COMMAND VoicebankAliasIndexTests)
+>>>>>>> main
 endif()
