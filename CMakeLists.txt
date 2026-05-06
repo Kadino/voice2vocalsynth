@@ -8,12 +8,11 @@ project(Voice2VocalSynth
 option(VOICE2VOCALSYNTH_BUILD_TESTS "Build Voice2VocalSynth tests" ON)
 
 add_library(Voice2VocalSynthCore
+    src/AppSettings.cpp
+    src/LatencyBudget.cpp
     src/PhonemeFallbackMapper.cpp
-<<<<<<< cursor/pitch-target-4e15
-    src/PitchTarget.cpp)
-=======
+    src/PitchTarget.cpp
     src/VoicebankAliasIndex.cpp)
->>>>>>> main
 
 target_include_directories(Voice2VocalSynthCore
     PUBLIC
@@ -33,7 +32,6 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
 
     add_test(NAME PhonemeFallbackMapperTests COMMAND PhonemeFallbackMapperTests)
 
-<<<<<<< cursor/pitch-target-4e15
     add_executable(PitchTargetTests
         tests/PitchTargetTests.cpp)
 
@@ -42,7 +40,7 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
             Voice2VocalSynthCore)
 
     add_test(NAME PitchTargetTests COMMAND PitchTargetTests)
-=======
+
     add_executable(VoicebankAliasIndexTests
         tests/VoicebankAliasIndexTests.cpp)
 
@@ -51,5 +49,22 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
             Voice2VocalSynthCore)
 
     add_test(NAME VoicebankAliasIndexTests COMMAND VoicebankAliasIndexTests)
->>>>>>> main
+
+    add_executable(LatencyBudgetTests
+        tests/LatencyBudgetTests.cpp)
+
+    target_link_libraries(LatencyBudgetTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    add_test(NAME LatencyBudgetTests COMMAND LatencyBudgetTests)
+
+    add_executable(AppSettingsTests
+        tests/AppSettingsTests.cpp)
+
+    target_link_libraries(AppSettingsTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    add_test(NAME AppSettingsTests COMMAND AppSettingsTests)
 endif()
