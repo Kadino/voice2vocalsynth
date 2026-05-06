@@ -4,6 +4,7 @@
 
 # Dependency and build output
 build/
+build-*/
 dist/
 out/
 target/
