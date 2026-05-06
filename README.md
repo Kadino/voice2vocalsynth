@@ -1,2 +1,3 @@
-# voice2vocalsynth
-An experiment in live audio processing
+# New Project
+
+This repository is ready for new project files.
