@@ -80,7 +80,8 @@ void rejectsInvalidSampleRates()
 {
     bool threw = false;
     try {
-        LatencyBudgetCalculator::samplesToMilliseconds(128, 0.0);
+        [[maybe_unused]] const auto ignored =
+            LatencyBudgetCalculator::samplesToMilliseconds(128, 0.0);
     } catch (const std::invalid_argument&) {
         threw = true;
     }
