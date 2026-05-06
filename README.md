@@ -14,15 +14,15 @@ The repository currently contains the first phoneme mapping slice:
   `ka` plus a shortened final `to` alias.
 - Renderer hints for partial finals so later audio code can preserve the
   consonant while attenuating the helper vowel tail.
-<<<<<<< cursor/pitch-target-4e15
 - Equal-temperament pitch target calculation with raw follow, semitone snap,
   key snap, fixed/default pitch, octave shifting, snap strength, and
   low-confidence fallback handling.
-=======
 - Basic `oto.ini` parsing for UTAU voicebank aliases and timing fields.
 - Voicebank alias resolution that chooses the first available mapper candidate
   and reports missing candidates for UI/debug output.
->>>>>>> main
+- Latency budget presets and end-to-end monitoring latency breakdowns for
+  input device, analysis, stabilization, render scheduling, and output device
+  delay.
 
 ## Build
 
