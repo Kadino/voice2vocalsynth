@@ -3,6 +3,10 @@
 Voice2VocalSynth is a private Windows-focused C++ project for live
 voice-to-UTAU vocal synthesis experiments.
 
+## Canonical project specification (agent-parseable)
+
+See [`voice2vocalsynth.spec.md`](voice2vocalsynth.spec.md). The **YAML frontmatter** in that file is the canonical, machine-parseable source of truth for project direction, pipeline, latency modes, detection design, and renderer plans.
+
 ## Current core module
 
 The repository currently contains the first phoneme mapping slice:
