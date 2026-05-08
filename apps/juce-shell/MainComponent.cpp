@@ -331,13 +331,13 @@ void MainComponent::loadShellSettingsFromDisk()
     }
 
     if (parsed.hasProperty("offlinePhonemes")) {
-        const juce::String s = parsed.getProperty("offlinePhonemes").toString();
+        const juce::String s = parsed.getProperty("offlinePhonemes", {}).toString();
         if (s.isNotEmpty()) {
             offlinePhonemesEditor_.setText(s, juce::dontSendNotification);
         }
     }
     if (parsed.hasProperty("offlineNote")) {
-        const juce::String s = parsed.getProperty("offlineNote").toString();
+        const juce::String s = parsed.getProperty("offlineNote", {}).toString();
         if (s.isNotEmpty()) {
             offlineNoteEditor_.setText(s, juce::dontSendNotification);
         }
