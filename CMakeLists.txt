@@ -12,6 +12,9 @@ add_library(Voice2VocalSynthCore
     src/AppSettings.cpp
     src/DebugTimeline.cpp
     src/LatencyBudget.cpp
+    src/OfflineRenderer.cpp
+    src/PcmWavReader.cpp
+    src/PcmWavWriter.cpp
     src/PhonemeFallbackMapper.cpp
     src/PitchHistory.cpp
     src/PitchTarget.cpp
@@ -128,4 +131,13 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
             Voice2VocalSynthCore)
 
     add_test(NAME AppSettingsTests COMMAND AppSettingsTests)
+
+    add_executable(OfflineRendererTests
+        tests/OfflineRendererTests.cpp)
+
+    target_link_libraries(OfflineRendererTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    add_test(NAME OfflineRendererTests COMMAND OfflineRendererTests)
 endif()

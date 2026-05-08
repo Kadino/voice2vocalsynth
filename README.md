@@ -35,6 +35,13 @@ The repository currently contains the first phoneme mapping slice:
 - Render planning that turns resolved aliases into scheduled render events with
   WAV paths, oto timing, render hints, target pitch, and skipped-event
   diagnostics.
+- Offline renderer v1: 16-bit PCM WAV load (mono/stereo to mono), oto
+  offset/cutoff region extract, linear time-stretch to event duration, timeline
+  mix into a float buffer, and UTAU-style **overlap** into the previous note
+  with a linear crossfade (no pitch shift yet).
+- 16-bit mono PCM WAV export (`PcmWavWriter`) for offline renders; JUCE shell
+  includes an **Offline render test** flow with phrase **ARPABET** and **note**
+  fields persisted in `shell_settings.json` (`offlinePhonemes`, `offlineNote`).
 - Debug timeline JSON export for pitch, render events, skipped events, and
   missing aliases.
 - Latency budget presets and end-to-end monitoring latency breakdowns for
