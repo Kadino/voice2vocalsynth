@@ -12,7 +12,8 @@ add_library(Voice2VocalSynthCore
     src/LatencyBudget.cpp
     src/PhonemeFallbackMapper.cpp
     src/PitchTarget.cpp
-    src/VoicebankAliasIndex.cpp)
+    src/VoicebankAliasIndex.cpp
+    src/VoicebankScanner.cpp)
 
 target_include_directories(Voice2VocalSynthCore
     PUBLIC
@@ -49,6 +50,15 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
             Voice2VocalSynthCore)
 
     add_test(NAME VoicebankAliasIndexTests COMMAND VoicebankAliasIndexTests)
+
+    add_executable(VoicebankScannerTests
+        tests/VoicebankScannerTests.cpp)
+
+    target_link_libraries(VoicebankScannerTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    add_test(NAME VoicebankScannerTests COMMAND VoicebankScannerTests)
 
     add_executable(LatencyBudgetTests
         tests/LatencyBudgetTests.cpp)
