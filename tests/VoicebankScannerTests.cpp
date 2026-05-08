@@ -35,12 +35,18 @@ void recursivelyScansMultipleOtoFiles()
                   "ka.wav=ka,0,80,180,25,5\n");
     writeTextFile(root / "append" / "OTO.INI",
                   "shi.wav=shi,0,90,190,28,5\n");
+    writeTextFile(root / "prefix.map",
+                  "C4\t\t_A3\n"
+                  "D4\tD4_\t_D4\n");
 
     const auto scan = VoicebankScanner::scan(root);
 
     assert(scan.foundOtoIni());
+    assert(scan.foundPrefixMap());
     assert(scan.otoFiles.size() == 2);
+    assert(scan.prefixMapFiles.size() == 1);
     assert(scan.entries.size() == 3);
+    assert(scan.prefixMapEntries.size() == 2);
     assert(scan.aliasIndex.containsAlias("a"));
     assert(scan.aliasIndex.containsAlias("ka"));
     assert(scan.aliasIndex.containsAlias("shi"));
@@ -51,6 +57,9 @@ void recursivelyScansMultipleOtoFiles()
     assert(entry != nullptr);
     assert(entry->sourceName == "append/OTO.INI");
     assert(entry->wavFile == "append/shi.wav");
+    assert(scan.prefixMapEntries[0].noteName == "C4");
+    assert(scan.prefixMapEntries[0].prefix.empty());
+    assert(scan.prefixMapEntries[0].suffix == "_A3");
 
     std::filesystem::remove_all(root);
 }
@@ -60,6 +69,7 @@ void canScanOnlyTopLevelWhenRequested()
     const auto root = makeTempVoicebankRoot();
     writeTextFile(root / "oto.ini", "a.wav=a,0,100,200,30,5\n");
     writeTextFile(root / "nested" / "oto.ini", "ka.wav=ka,0,80,180,25,5\n");
+    writeTextFile(root / "nested" / "prefix.map", "C4\t\t_C4\n");
 
     VoicebankScanOptions options;
     options.recursive = false;
@@ -68,8 +78,27 @@ void canScanOnlyTopLevelWhenRequested()
     assert(scan.otoFiles.size() == 1);
     assert(scan.aliasIndex.containsAlias("a"));
     assert(!scan.aliasIndex.containsAlias("ka"));
+    assert(!scan.foundPrefixMap());
 
     std::filesystem::remove_all(root);
+}
+
+void parsesPrefixMapFormats()
+{
+    const auto entries = parsePrefixMapContent(
+        "# comment\n"
+        "C4\t\t_C4\n"
+        "D4,D4_,_D4\n"
+        "E4 E4_ _E4\n"
+        "malformed\n");
+
+    assert(entries.size() == 3);
+    assert(entries[0].noteName == "C4");
+    assert(entries[0].prefix.empty());
+    assert(entries[0].suffix == "_C4");
+    assert(entries[1].prefix == "D4_");
+    assert(entries[1].suffix == "_D4");
+    assert(entries[2].noteName == "E4");
 }
 
 void preservesHighByteAliasesForLaterEncodingHandling()
@@ -104,6 +133,7 @@ int main()
 {
     recursivelyScansMultipleOtoFiles();
     canScanOnlyTopLevelWhenRequested();
+    parsesPrefixMapFormats();
     preservesHighByteAliasesForLaterEncodingHandling();
     reportsMissingVoicebankFolder();
 

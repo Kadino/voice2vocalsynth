@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <cctype>
 #include <fstream>
+#include <iterator>
 #include <sstream>
+#include <stdexcept>
 #include <system_error>
 
 namespace Voice2VocalSynth
@@ -54,6 +56,59 @@ std::filesystem::path makeGenericRelative(const std::filesystem::path& path,
     return relative.lexically_normal();
 }
 
+std::string trim(std::string_view value)
+{
+    const auto first = value.find_first_not_of(" \t\r\n");
+    if (first == std::string_view::npos) {
+        return {};
+    }
+
+    const auto last = value.find_last_not_of(" \t\r\n");
+    return std::string(value.substr(first, last - first + 1));
+}
+
+bool isCommentOrEmpty(std::string_view line)
+{
+    const auto trimmed = trim(line);
+    return trimmed.empty() || trimmed.rfind("#", 0) == 0 || trimmed.rfind("//", 0) == 0;
+}
+
+std::vector<std::string> splitPrefixMapFields(std::string_view line)
+{
+    std::vector<std::string> fields;
+
+    const auto splitByDelimiter = [&](char delimiter) {
+        std::size_t start = 0;
+        while (start <= line.size()) {
+            const auto next = line.find(delimiter, start);
+            if (next == std::string_view::npos) {
+                fields.push_back(trim(line.substr(start)));
+                break;
+            }
+
+            fields.push_back(trim(line.substr(start, next - start)));
+            start = next + 1;
+        }
+    };
+
+    if (line.find('\t') != std::string_view::npos) {
+        splitByDelimiter('\t');
+        return fields;
+    }
+
+    if (line.find(',') != std::string_view::npos) {
+        splitByDelimiter(',');
+        return fields;
+    }
+
+    std::istringstream stream{std::string(line)};
+    std::string field;
+    while (stream >> field) {
+        fields.push_back(field);
+    }
+    return fields;
+}
+
 } // namespace
 
 VoicebankAliasStyle VoicebankScanResult::aliasStyle() const noexcept
@@ -64,6 +119,48 @@ VoicebankAliasStyle VoicebankScanResult::aliasStyle() const noexcept
 bool VoicebankScanResult::foundOtoIni() const noexcept
 {
     return !otoFiles.empty();
+}
+
+bool VoicebankScanResult::foundPrefixMap() const noexcept
+{
+    return !prefixMapFiles.empty();
+}
+
+std::vector<VoicebankPrefixMapEntry> parsePrefixMapContent(std::string_view content,
+                                                           std::string sourceName)
+{
+    std::vector<VoicebankPrefixMapEntry> entries;
+    std::size_t start = 0;
+    std::size_t lineNumber = 1;
+
+    while (start <= content.size()) {
+        const auto newline = content.find('\n', start);
+        const auto line = newline == std::string_view::npos
+                              ? content.substr(start)
+                              : content.substr(start, newline - start);
+
+        if (!isCommentOrEmpty(line)) {
+            const auto fields = splitPrefixMapFields(line);
+            if (fields.size() >= 3 && !fields[0].empty()) {
+                VoicebankPrefixMapEntry entry;
+                entry.noteName = fields[0];
+                entry.prefix = fields[1];
+                entry.suffix = fields[2];
+                entry.sourceName = sourceName;
+                entry.sourceLine = lineNumber;
+                entries.push_back(std::move(entry));
+            }
+        }
+
+        if (newline == std::string_view::npos) {
+            break;
+        }
+
+        start = newline + 1;
+        ++lineNumber;
+    }
+
+    return entries;
 }
 
 VoicebankScanResult VoicebankScanner::scan(const std::filesystem::path& rootPath,
@@ -101,14 +198,37 @@ VoicebankScanResult VoicebankScanner::scan(const std::filesystem::path& rootPath
         }
     };
 
+    auto scanPrefixMapFile = [&](const std::filesystem::path& mapPath) {
+        const auto relativeMap = makeGenericRelative(mapPath, result.rootPath);
+        result.prefixMapFiles.push_back(relativeMap);
+
+        try {
+            const auto content = stripUtf8Bom(readFileBytes(mapPath));
+            auto entries = parsePrefixMapContent(content, relativeMap.generic_string());
+            result.prefixMapEntries.insert(result.prefixMapEntries.end(),
+                                           std::make_move_iterator(entries.begin()),
+                                           std::make_move_iterator(entries.end()));
+        } catch (const std::exception& exception) {
+            result.warnings.push_back("Unable to parse " + relativeMap.generic_string() + ": " + exception.what());
+        }
+    };
+
     if (options.recursive) {
         std::filesystem::recursive_directory_iterator iterator(result.rootPath,
                                                               std::filesystem::directory_options::skip_permission_denied,
                                                               statusError);
         const std::filesystem::recursive_directory_iterator end;
         while (!statusError && iterator != end) {
-            if (iterator->is_regular_file(statusError) && isOtoIniFile(iterator->path(), options)) {
-                scanOtoFile(iterator->path());
+            if (iterator->is_regular_file(statusError)) {
+                if (matchesConfiguredFileName(iterator->path(),
+                                              options.otoFileName,
+                                              options.caseInsensitiveOtoFileName)) {
+                    scanOtoFile(iterator->path());
+                } else if (matchesConfiguredFileName(iterator->path(),
+                                                     options.prefixMapFileName,
+                                                     options.caseInsensitiveOtoFileName)) {
+                    scanPrefixMapFile(iterator->path());
+                }
             }
             iterator.increment(statusError);
         }
@@ -118,8 +238,16 @@ VoicebankScanResult VoicebankScanner::scan(const std::filesystem::path& rootPath
                                                     statusError);
         const std::filesystem::directory_iterator end;
         while (!statusError && iterator != end) {
-            if (iterator->is_regular_file(statusError) && isOtoIniFile(iterator->path(), options)) {
-                scanOtoFile(iterator->path());
+            if (iterator->is_regular_file(statusError)) {
+                if (matchesConfiguredFileName(iterator->path(),
+                                              options.otoFileName,
+                                              options.caseInsensitiveOtoFileName)) {
+                    scanOtoFile(iterator->path());
+                } else if (matchesConfiguredFileName(iterator->path(),
+                                                     options.prefixMapFileName,
+                                                     options.caseInsensitiveOtoFileName)) {
+                    scanPrefixMapFile(iterator->path());
+                }
             }
             iterator.increment(statusError);
         }
@@ -130,6 +258,7 @@ VoicebankScanResult VoicebankScanner::scan(const std::filesystem::path& rootPath
     }
 
     std::sort(result.otoFiles.begin(), result.otoFiles.end());
+    std::sort(result.prefixMapFiles.begin(), result.prefixMapFiles.end());
     if (result.otoFiles.empty()) {
         result.warnings.push_back("No oto.ini files were found in " + result.rootPath.string());
     }
@@ -138,12 +267,13 @@ VoicebankScanResult VoicebankScanner::scan(const std::filesystem::path& rootPath
     return result;
 }
 
-bool VoicebankScanner::isOtoIniFile(const std::filesystem::path& path,
-                                    const VoicebankScanOptions& options)
+bool VoicebankScanner::matchesConfiguredFileName(const std::filesystem::path& path,
+                                                 const std::string& expectedFileName,
+                                                 bool caseInsensitive)
 {
     auto actual = path.filename().string();
-    auto expected = options.otoFileName;
-    if (options.caseInsensitiveOtoFileName) {
+    auto expected = expectedFileName;
+    if (caseInsensitive) {
         actual = lowerAscii(std::move(actual));
         expected = lowerAscii(std::move(expected));
     }
