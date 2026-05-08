@@ -11,6 +11,7 @@ add_library(Voice2VocalSynthCore
     src/AppSettings.cpp
     src/LatencyBudget.cpp
     src/PhonemeFallbackMapper.cpp
+    src/PitchHistory.cpp
     src/PitchTarget.cpp
     src/VoicebankAliasIndex.cpp
     src/VoicebankMappingPlanner.cpp
@@ -42,6 +43,15 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
             Voice2VocalSynthCore)
 
     add_test(NAME PitchTargetTests COMMAND PitchTargetTests)
+
+    add_executable(PitchHistoryTests
+        tests/PitchHistoryTests.cpp)
+
+    target_link_libraries(PitchHistoryTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    add_test(NAME PitchHistoryTests COMMAND PitchHistoryTests)
 
     add_executable(VoicebankAliasIndexTests
         tests/VoicebankAliasIndexTests.cpp)
