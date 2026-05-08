@@ -9,6 +9,7 @@ option(VOICE2VOCALSYNTH_BUILD_TESTS "Build Voice2VocalSynth tests" ON)
 
 add_library(Voice2VocalSynthCore
     src/AppSettings.cpp
+    src/DebugTimeline.cpp
     src/LatencyBudget.cpp
     src/PhonemeFallbackMapper.cpp
     src/PitchHistory.cpp
@@ -89,6 +90,15 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
             Voice2VocalSynthCore)
 
     add_test(NAME RenderPlannerTests COMMAND RenderPlannerTests)
+
+    add_executable(DebugTimelineTests
+        tests/DebugTimelineTests.cpp)
+
+    target_link_libraries(DebugTimelineTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    add_test(NAME DebugTimelineTests COMMAND DebugTimelineTests)
 
     add_executable(LatencyBudgetTests
         tests/LatencyBudgetTests.cpp)
