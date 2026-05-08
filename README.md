@@ -28,6 +28,9 @@ The repository currently contains the first phoneme mapping slice:
   selection and prefix/suffix-aware alias candidate expansion.
 - Voicebank mapping planning that combines ARPABET mapping, prefix/suffix
   expansion, alias resolution, and missing-alias diagnostics.
+- Render planning that turns resolved aliases into scheduled render events with
+  WAV paths, oto timing, render hints, target pitch, and skipped-event
+  diagnostics.
 - Latency budget presets and end-to-end monitoring latency breakdowns for
   analysis, stabilization, render scheduling, and device latency.
 - App preset settings for audio routing, voicebank selection, pitch behavior,
