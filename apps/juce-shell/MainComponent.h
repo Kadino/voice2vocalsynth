@@ -6,7 +6,8 @@
 
 class MainComponent final : public juce::Component,
                             private juce::AudioIODeviceCallback,
-                            private juce::Timer
+                            private juce::Timer,
+                            private juce::ChangeListener
 {
 public:
     MainComponent();
@@ -27,8 +28,12 @@ private:
 
     void timerCallback() override;
 
+    void changeListenerCallback(juce::ChangeBroadcaster* source) override;
+
     void showAudioSettings();
     void refreshLatencyDisplay();
+    void saveAudioDeviceSettings() const;
+    void saveShellSettings();
 
     juce::AudioDeviceManager deviceManager;
 

@@ -1,9 +1,42 @@
 #include "MainComponent.h"
 
+#include <memory>
 #include <sstream>
 
 namespace
 {
+
+[[nodiscard]] juce::File appDataRootDirectory()
+{
+    return juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+        .getChildFile("Voice2VocalSynth");
+}
+
+[[nodiscard]] juce::File audioDeviceSettingsFile()
+{
+    return appDataRootDirectory().getChildFile("audio_device.xml");
+}
+
+[[nodiscard]] juce::File shellSettingsFile()
+{
+    return appDataRootDirectory().getChildFile("shell_settings.json");
+}
+
+[[nodiscard]] int loadLatencyPresetIndexFromDisk()
+{
+    const auto f = shellSettingsFile();
+    if (!f.existsAsFile()) {
+        return -1;
+    }
+
+    const juce::var parsed = juce::JSON::parse(f.loadFileAsString());
+    if (parsed.isVoid() || !parsed.hasProperty("latencyPreset")) {
+        return -1;
+    }
+
+    const int v = static_cast<int>(parsed.getProperty("latencyPreset", 0));
+    return juce::jlimit(0, static_cast<int>(Voice2VocalSynth::LatencyPreset::Custom), v);
+}
 
 Voice2VocalSynth::AudioDeviceLatency deviceLatencyFromJuce(juce::AudioIODevice* device)
 {
@@ -43,8 +76,10 @@ MainComponent::MainComponent()
     titleLabel_.setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(titleLabel_);
 
-    hintLabel_.setText("Live pass-through for I/O testing. Use Audio settings to pick devices and buffer size.",
-                       juce::dontSendNotification);
+    hintLabel_.setText(
+        "Live pass-through for I/O testing. Settings folder: %LOCALAPPDATA%\\Voice2VocalSynth\\ "
+        "(audio_device.xml, shell_settings.json).",
+        juce::dontSendNotification);
     hintLabel_.setFont(juce::Font(juce::FontOptions(14.0f)));
     hintLabel_.setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(hintLabel_);
@@ -61,8 +96,16 @@ MainComponent::MainComponent()
         const auto preset = static_cast<Voice2VocalSynth::LatencyPreset>(i);
         latencyPresetCombo_.addItem(Voice2VocalSynth::LatencyBudgetCalculator::presetName(preset), i + 1);
     }
-    latencyPresetCombo_.setSelectedId(static_cast<int>(Voice2VocalSynth::LatencyPreset::Balanced) + 1,
-                                      juce::dontSendNotification);
+
+    const int loadedPreset = loadLatencyPresetIndexFromDisk();
+    const int latencyComboId =
+        (loadedPreset >= 0)
+            ? (loadedPreset + 1)
+            : (static_cast<int>(Voice2VocalSynth::LatencyPreset::Balanced) + 1);
+    latencyPresetCombo_.setSelectedId(latencyComboId, juce::dontSendNotification);
+    analysisSettings_ = Voice2VocalSynth::LatencyBudgetCalculator::presetSettings(
+        static_cast<Voice2VocalSynth::LatencyPreset>(latencyComboId - 1));
+
     latencyPresetCombo_.onChange = [this] {
         const int id = latencyPresetCombo_.getSelectedId();
         if (id <= 0) {
@@ -71,6 +114,7 @@ MainComponent::MainComponent()
         analysisSettings_ = Voice2VocalSynth::LatencyBudgetCalculator::presetSettings(
             static_cast<Voice2VocalSynth::LatencyPreset>(id - 1));
         refreshLatencyDisplay();
+        saveShellSettings();
     };
 
     e2eLabel_.setText("Estimated monitoring latency", juce::dontSendNotification);
@@ -93,7 +137,16 @@ MainComponent::MainComponent()
         juce::FontOptions(juce::Font::getDefaultMonospacedFontName(), 13.0f, juce::Font::plain)));
     addAndMakeVisible(breakdownEditor_);
 
-    deviceManager.initialise(2, 2, nullptr, true);
+    std::unique_ptr<juce::XmlElement> savedAudioState;
+    {
+        const auto f = audioDeviceSettingsFile();
+        if (f.existsAsFile()) {
+            savedAudioState = juce::XmlDocument::parse(f);
+        }
+    }
+
+    deviceManager.initialise(2, 2, savedAudioState.get(), true);
+    deviceManager.addChangeListener(this);
     deviceManager.addAudioCallback(this);
 
     setSize(640, 520);
@@ -104,7 +157,10 @@ MainComponent::MainComponent()
 MainComponent::~MainComponent()
 {
     stopTimer();
+    deviceManager.removeChangeListener(this);
     deviceManager.removeAudioCallback(this);
+    saveShellSettings();
+    saveAudioDeviceSettings();
     deviceManager.closeAudioDevice();
 }
 
@@ -177,6 +233,37 @@ void MainComponent::audioDeviceStopped()
 void MainComponent::timerCallback()
 {
     refreshLatencyDisplay();
+}
+
+void MainComponent::changeListenerCallback(juce::ChangeBroadcaster* source)
+{
+    if (source == &deviceManager) {
+        saveAudioDeviceSettings();
+    }
+}
+
+void MainComponent::saveAudioDeviceSettings() const
+{
+    if (auto state = deviceManager.createStateXml()) {
+        const auto f = audioDeviceSettingsFile();
+        (void)f.getParentDirectory().createDirectory();
+        if (!state->writeTo(f)) {
+            juce::Logger::writeToLog("Voice2VocalSynth: failed to write " + f.getFullPathName());
+        }
+    }
+}
+
+void MainComponent::saveShellSettings()
+{
+    juce::DynamicObject::Ptr obj {new juce::DynamicObject()};
+    obj->setProperty("latencyPreset", latencyPresetCombo_.getSelectedId() - 1);
+
+    const auto f = shellSettingsFile();
+    (void)f.getParentDirectory().createDirectory();
+    const juce::String text = juce::JSON::toString(juce::var(obj.get()), false);
+    if (!f.replaceWithText(text)) {
+        juce::Logger::writeToLog("Voice2VocalSynth: failed to write " + f.getFullPathName());
+    }
 }
 
 void MainComponent::showAudioSettings()
