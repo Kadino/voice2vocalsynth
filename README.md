@@ -17,6 +17,7 @@ The repository currently contains the first phoneme mapping slice:
 - Equal-temperament pitch target calculation with raw follow, semitone snap,
   key snap, fixed/default pitch, octave shifting, snap strength, and
   low-confidence fallback handling.
+- Recent reliable pitch tracking for low-confidence fallback means.
 - Basic `oto.ini` parsing for UTAU voicebank aliases and timing fields.
 - Voicebank alias resolution that chooses the first available mapper candidate
   and reports missing candidates for UI/debug output.
