@@ -109,6 +109,23 @@ std::vector<std::string> splitPrefixMapFields(std::string_view line)
     return fields;
 }
 
+bool containsAliasCandidate(const std::vector<AliasCandidate>& candidates,
+                            const std::string& alias)
+{
+    return std::any_of(candidates.begin(), candidates.end(), [&alias](const AliasCandidate& candidate) {
+        return candidate.alias == alias;
+    });
+}
+
+void appendCandidateIfUnique(std::vector<AliasCandidate>& candidates,
+                             AliasCandidate candidate)
+{
+    if (candidate.alias.empty() || containsAliasCandidate(candidates, candidate.alias)) {
+        return;
+    }
+    candidates.push_back(std::move(candidate));
+}
+
 } // namespace
 
 VoicebankAliasStyle VoicebankScanResult::aliasStyle() const noexcept
@@ -161,6 +178,48 @@ std::vector<VoicebankPrefixMapEntry> parsePrefixMapContent(std::string_view cont
     }
 
     return entries;
+}
+
+VoicebankPrefixMapMatch findPrefixMapEntry(const std::vector<VoicebankPrefixMapEntry>& entries,
+                                           std::string_view noteName)
+{
+    const auto found = std::find_if(entries.begin(), entries.end(), [noteName](const auto& entry) {
+        return entry.noteName == noteName;
+    });
+
+    if (found == entries.end()) {
+        return {};
+    }
+
+    VoicebankPrefixMapMatch match;
+    match.found = true;
+    match.entry = *found;
+    return match;
+}
+
+AliasEvent applyPrefixMapToAliasEvent(const AliasEvent& event,
+                                      const std::vector<VoicebankPrefixMapEntry>& entries,
+                                      std::string_view noteName)
+{
+    const auto match = findPrefixMapEntry(entries, noteName);
+    if (!match.found || (match.entry.prefix.empty() && match.entry.suffix.empty())) {
+        return event;
+    }
+
+    AliasEvent mapped = event;
+    mapped.candidates.clear();
+
+    for (const auto& candidate : event.candidates) {
+        appendCandidateIfUnique(mapped.candidates,
+                                {match.entry.prefix + candidate.alias + match.entry.suffix,
+                                 "prefixMap"});
+    }
+
+    for (const auto& candidate : event.candidates) {
+        appendCandidateIfUnique(mapped.candidates, candidate);
+    }
+
+    return mapped;
 }
 
 VoicebankScanResult VoicebankScanner::scan(const std::filesystem::path& rootPath,

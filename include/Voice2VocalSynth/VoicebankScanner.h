@@ -41,6 +41,12 @@ struct VoicebankScanResult
     [[nodiscard]] bool foundPrefixMap() const noexcept;
 };
 
+struct VoicebankPrefixMapMatch
+{
+    bool found = false;
+    VoicebankPrefixMapEntry entry;
+};
+
 class VoicebankScanner
 {
 public:
@@ -56,5 +62,12 @@ private:
 [[nodiscard]] std::vector<VoicebankPrefixMapEntry> parsePrefixMapContent(
     std::string_view content,
     std::string sourceName = "prefix.map");
+[[nodiscard]] VoicebankPrefixMapMatch findPrefixMapEntry(
+    const std::vector<VoicebankPrefixMapEntry>& entries,
+    std::string_view noteName);
+[[nodiscard]] AliasEvent applyPrefixMapToAliasEvent(
+    const AliasEvent& event,
+    const std::vector<VoicebankPrefixMapEntry>& entries,
+    std::string_view noteName);
 
 } // namespace Voice2VocalSynth
