@@ -34,14 +34,24 @@ private:
     void refreshLatencyDisplay();
     void saveAudioDeviceSettings() const;
     void saveShellSettings();
+    void loadShellSettingsFromDisk();
+
+    void offlineRenderTest();
+    void runOfflineRenderToFile(const juce::File& voicebankDirectory, const juce::File& outputWavFile);
 
     juce::AudioDeviceManager deviceManager;
 
     juce::Label titleLabel_;
     juce::Label hintLabel_;
     juce::TextButton audioSettingsButton_ {"Audio settings..."};
+    juce::TextButton offlineRenderButton_ {"Offline render test…"};
     juce::Label latencyPresetLabel_;
     juce::ComboBox latencyPresetCombo_;
+    juce::Label offlinePhraseLabel_;
+    juce::Label offlinePhonemesLabel_;
+    juce::TextEditor offlinePhonemesEditor_;
+    juce::Label offlineNoteLabel_;
+    juce::TextEditor offlineNoteEditor_;
     juce::Label e2eLabel_;
     juce::Label e2eValueLabel_;
     juce::Label breakdownLabel_;

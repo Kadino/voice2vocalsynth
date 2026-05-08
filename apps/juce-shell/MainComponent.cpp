@@ -1,7 +1,17 @@
 #include "MainComponent.h"
 
+#include "Voice2VocalSynth/OfflineRenderer.h"
+#include "Voice2VocalSynth/PcmWavWriter.h"
+#include "Voice2VocalSynth/PitchTarget.h"
+#include "Voice2VocalSynth/RenderPlanner.h"
+#include "Voice2VocalSynth/VoicebankMappingPlanner.h"
+#include "Voice2VocalSynth/VoicebankScanner.h"
+
+#include <filesystem>
 #include <memory>
 #include <sstream>
+#include <string>
+#include <vector>
 
 namespace
 {
@@ -22,20 +32,20 @@ namespace
     return appDataRootDirectory().getChildFile("shell_settings.json");
 }
 
-[[nodiscard]] int loadLatencyPresetIndexFromDisk()
+[[nodiscard]] std::vector<std::string> parseArpabetTokens(const juce::String& text)
 {
-    const auto f = shellSettingsFile();
-    if (!f.existsAsFile()) {
-        return -1;
+    std::vector<std::string> out;
+    juce::StringArray parts;
+    parts.addTokens(text.trim(), " \t\r\n", "");
+    for (const auto& p : parts) {
+        if (p.isNotEmpty()) {
+            out.push_back(p.toStdString());
+        }
     }
-
-    const juce::var parsed = juce::JSON::parse(f.loadFileAsString());
-    if (parsed.isVoid() || !parsed.hasProperty("latencyPreset")) {
-        return -1;
+    if (out.empty()) {
+        out = {"K", "AE", "T"};
     }
-
-    const int v = static_cast<int>(parsed.getProperty("latencyPreset", 0));
-    return juce::jlimit(0, static_cast<int>(Voice2VocalSynth::LatencyPreset::Custom), v);
+    return out;
 }
 
 Voice2VocalSynth::AudioDeviceLatency deviceLatencyFromJuce(juce::AudioIODevice* device)
@@ -87,6 +97,9 @@ MainComponent::MainComponent()
     addAndMakeVisible(audioSettingsButton_);
     audioSettingsButton_.onClick = [this] { showAudioSettings(); };
 
+    addAndMakeVisible(offlineRenderButton_);
+    offlineRenderButton_.onClick = [this] { offlineRenderTest(); };
+
     latencyPresetLabel_.setText("Latency preset (analysis budget)", juce::dontSendNotification);
     latencyPresetLabel_.setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(latencyPresetLabel_);
@@ -97,14 +110,23 @@ MainComponent::MainComponent()
         latencyPresetCombo_.addItem(Voice2VocalSynth::LatencyBudgetCalculator::presetName(preset), i + 1);
     }
 
-    const int loadedPreset = loadLatencyPresetIndexFromDisk();
-    const int latencyComboId =
-        (loadedPreset >= 0)
-            ? (loadedPreset + 1)
-            : (static_cast<int>(Voice2VocalSynth::LatencyPreset::Balanced) + 1);
-    latencyPresetCombo_.setSelectedId(latencyComboId, juce::dontSendNotification);
-    analysisSettings_ = Voice2VocalSynth::LatencyBudgetCalculator::presetSettings(
-        static_cast<Voice2VocalSynth::LatencyPreset>(latencyComboId - 1));
+    offlinePhraseLabel_.setText("Offline render phrase", juce::dontSendNotification);
+    offlinePhraseLabel_.setFont(juce::Font(juce::FontOptions(14.0f, juce::Font::bold)));
+    addAndMakeVisible(offlinePhraseLabel_);
+
+    offlinePhonemesLabel_.setText("ARPABET", juce::dontSendNotification);
+    addAndMakeVisible(offlinePhonemesLabel_);
+    offlinePhonemesEditor_.setMultiLine(false);
+    offlinePhonemesEditor_.setTextToShowWhenEmpty("e.g. K AE T", juce::Colours::grey);
+    addAndMakeVisible(offlinePhonemesEditor_);
+
+    offlineNoteLabel_.setText("Note", juce::dontSendNotification);
+    addAndMakeVisible(offlineNoteLabel_);
+    offlineNoteEditor_.setMultiLine(false);
+    offlineNoteEditor_.setTextToShowWhenEmpty("C4", juce::Colours::grey);
+    addAndMakeVisible(offlineNoteEditor_);
+
+    loadShellSettingsFromDisk();
 
     latencyPresetCombo_.onChange = [this] {
         const int id = latencyPresetCombo_.getSelectedId();
@@ -149,7 +171,7 @@ MainComponent::MainComponent()
     deviceManager.addChangeListener(this);
     deviceManager.addAudioCallback(this);
 
-    setSize(640, 520);
+    setSize(640, 600);
     startTimerHz(4);
     refreshLatencyDisplay();
 }
@@ -179,11 +201,22 @@ void MainComponent::resized()
 
     auto buttonRow = r.removeFromTop(28);
     audioSettingsButton_.setBounds(buttonRow.removeFromLeft(180));
+    buttonRow.removeFromLeft(10);
+    offlineRenderButton_.setBounds(buttonRow.removeFromLeft(220));
     r.removeFromTop(8);
     latencyPresetLabel_.setBounds(r.removeFromTop(20));
     auto presetRow = r.removeFromTop(28);
     latencyPresetCombo_.setBounds(presetRow.removeFromLeft(320));
-    r.removeFromTop(14);
+    r.removeFromTop(10);
+
+    offlinePhraseLabel_.setBounds(r.removeFromTop(20));
+    auto phraseRow = r.removeFromTop(26);
+    offlinePhonemesLabel_.setBounds(phraseRow.removeFromLeft(72));
+    offlinePhonemesEditor_.setBounds(phraseRow.removeFromLeft(260));
+    phraseRow.removeFromLeft(10);
+    offlineNoteLabel_.setBounds(phraseRow.removeFromLeft(40));
+    offlineNoteEditor_.setBounds(phraseRow.removeFromLeft(64));
+    r.removeFromTop(12);
 
     e2eLabel_.setBounds(r.removeFromTop(20));
     e2eValueLabel_.setBounds(r.removeFromTop(26));
@@ -257,6 +290,8 @@ void MainComponent::saveShellSettings()
 {
     juce::DynamicObject::Ptr obj {new juce::DynamicObject()};
     obj->setProperty("latencyPreset", latencyPresetCombo_.getSelectedId() - 1);
+    obj->setProperty("offlinePhonemes", offlinePhonemesEditor_.getText());
+    obj->setProperty("offlineNote", offlineNoteEditor_.getText());
 
     const auto f = shellSettingsFile();
     (void)f.getParentDirectory().createDirectory();
@@ -264,6 +299,155 @@ void MainComponent::saveShellSettings()
     if (!f.replaceWithText(text)) {
         juce::Logger::writeToLog("Voice2VocalSynth: failed to write " + f.getFullPathName());
     }
+}
+
+void MainComponent::loadShellSettingsFromDisk()
+{
+    latencyPresetCombo_.setSelectedId(static_cast<int>(Voice2VocalSynth::LatencyPreset::Balanced) + 1,
+                                     juce::dontSendNotification);
+    analysisSettings_ = Voice2VocalSynth::LatencyBudgetCalculator::presetSettings(
+        Voice2VocalSynth::LatencyPreset::Balanced);
+    offlinePhonemesEditor_.setText("K AE T", juce::dontSendNotification);
+    offlineNoteEditor_.setText("C4", juce::dontSendNotification);
+
+    const auto f = shellSettingsFile();
+    if (!f.existsAsFile()) {
+        return;
+    }
+
+    const juce::var parsed = juce::JSON::parse(f.loadFileAsString());
+    if (parsed.isVoid()) {
+        return;
+    }
+
+    if (parsed.hasProperty("latencyPreset")) {
+        const int v = juce::jlimit(
+            0,
+            static_cast<int>(Voice2VocalSynth::LatencyPreset::Custom),
+            static_cast<int>(parsed.getProperty("latencyPreset", 0)));
+        latencyPresetCombo_.setSelectedId(v + 1, juce::dontSendNotification);
+        analysisSettings_ = Voice2VocalSynth::LatencyBudgetCalculator::presetSettings(
+            static_cast<Voice2VocalSynth::LatencyPreset>(v));
+    }
+
+    if (parsed.hasProperty("offlinePhonemes")) {
+        const juce::String s = parsed.getProperty("offlinePhonemes", {}).toString();
+        if (s.isNotEmpty()) {
+            offlinePhonemesEditor_.setText(s, juce::dontSendNotification);
+        }
+    }
+    if (parsed.hasProperty("offlineNote")) {
+        const juce::String s = parsed.getProperty("offlineNote", {}).toString();
+        if (s.isNotEmpty()) {
+            offlineNoteEditor_.setText(s, juce::dontSendNotification);
+        }
+    }
+}
+
+void MainComponent::offlineRenderTest()
+{
+    saveShellSettings();
+
+    const auto folderFlags = juce::FileBrowserComponent::openMode
+                             | juce::FileBrowserComponent::canSelectDirectories;
+    auto dirChooser = std::make_shared<juce::FileChooser>("Select voicebank folder", juce::File {}, "*");
+    dirChooser->launchAsync(folderFlags, [this, dirChooser](const juce::FileChooser& fc) {
+        juce::ignoreUnused(dirChooser);
+        const juce::File dir = fc.getResult();
+        if (!dir.isDirectory()) {
+            return;
+        }
+
+        auto saveChooser = std::make_shared<juce::FileChooser>(
+            "Save WAV as",
+            dir.getChildFile("Voice2VocalSynth_offline_test.wav"),
+            "*.wav");
+        const auto saveFlags = juce::FileBrowserComponent::saveMode
+                               | juce::FileBrowserComponent::warnAboutOverwriting;
+        saveChooser->launchAsync(saveFlags, [this, dir, saveChooser](const juce::FileChooser& fc2) {
+            juce::ignoreUnused(saveChooser);
+            juce::File out = fc2.getResult();
+            if (out.getFullPathName().isEmpty()) {
+                return;
+            }
+            if (!out.hasFileExtension(".wav")) {
+                out = out.withFileExtension("wav");
+            }
+            runOfflineRenderToFile(dir, out);
+        });
+    });
+}
+
+void MainComponent::runOfflineRenderToFile(const juce::File& voicebankDirectory,
+                                           const juce::File& outputWavFile)
+{
+    saveShellSettings();
+
+    const std::filesystem::path root { voicebankDirectory.getFullPathName().toStdString() };
+
+    const auto scan = Voice2VocalSynth::VoicebankScanner::scan(root);
+    if (!scan.foundOtoIni()) {
+        juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon,
+                                                "Offline render",
+                                                "No oto.ini found under the selected folder.");
+        return;
+    }
+
+    Voice2VocalSynth::VoicebankMappingPlanner planner;
+    Voice2VocalSynth::VoicebankMappingRequest mapReq;
+    mapReq.arpabetPhonemes = parseArpabetTokens(offlinePhonemesEditor_.getText());
+    juce::String note = offlineNoteEditor_.getText().trim();
+    if (note.isEmpty()) {
+        note = "C4";
+    }
+    mapReq.targetNoteName = note.toStdString();
+    const auto mapping = planner.plan(mapReq, scan.aliasIndex, scan.prefixMapEntries);
+
+    Voice2VocalSynth::PitchTargetCalculator calculator;
+    Voice2VocalSynth::PitchInput pitchIn;
+    pitchIn.frequencyHz = Voice2VocalSynth::PitchTargetCalculator::midiToFrequency(60.0);
+    pitchIn.confidence = 1.0;
+    const auto pitchTarget = calculator.calculate(pitchIn);
+
+    Voice2VocalSynth::RenderPlanRequest planReq;
+    planReq.mappingPlan = mapping;
+    planReq.pitchTarget = pitchTarget;
+    planReq.startTimeSeconds = 0.0;
+    planReq.defaultEventDurationMs = 120.0;
+    const auto renderPlan = Voice2VocalSynth::RenderPlanner::plan(planReq);
+
+    Voice2VocalSynth::OfflineRenderOptions opts;
+    opts.voicebankRoot = root;
+    opts.outputSampleRate = 48000;
+    auto rendered = Voice2VocalSynth::OfflineRenderer::render(renderPlan, opts);
+
+    if (!rendered.ok) {
+        juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon,
+                                                "Offline render",
+                                                juce::String(rendered.error));
+        return;
+    }
+
+    const std::filesystem::path outPath { outputWavFile.getFullPathName().toStdString() };
+    const auto writeRes =
+        Voice2VocalSynth::PcmWavWriter::writeMonoPcm16(outPath, rendered.mono, rendered.sampleRate);
+    if (!writeRes.ok) {
+        juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon,
+                                                "Offline render",
+                                                juce::String(writeRes.error));
+        return;
+    }
+
+    juce::String msg = "Saved: " + outputWavFile.getFullPathName() + "\n\n";
+    msg += "Render events: " + juce::String(static_cast<int>(renderPlan.events.size())) + "\n";
+    if (!renderPlan.skippedEvents.empty()) {
+        msg += "Skipped: " + juce::String(static_cast<int>(renderPlan.skippedEvents.size())) + "\n";
+    }
+    for (const auto& w : rendered.warnings) {
+        msg += juce::String(w) + "\n";
+    }
+
+    juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::InfoIcon, "Offline render", msg);
 }
 
 void MainComponent::showAudioSettings()
