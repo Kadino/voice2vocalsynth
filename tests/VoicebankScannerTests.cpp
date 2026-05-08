@@ -101,6 +101,41 @@ void parsesPrefixMapFormats()
     assert(entries[2].noteName == "E4");
 }
 
+void appliesPrefixMapToAliasCandidates()
+{
+    AliasEvent event;
+    event.role = AliasRole::CvSyllable;
+    event.sourcePhonemes = {"K", "AE"};
+    event.candidates = {{"ka", "primary"}, {"ga", "fallback"}};
+
+    const auto prefixMap = parsePrefixMapContent(
+        "C4\tC4_\t_C4\n"
+        "D4\tD4_\t_D4\n");
+
+    const auto mapped = applyPrefixMapToAliasEvent(event, prefixMap, "C4");
+
+    assert(mapped.role == AliasRole::CvSyllable);
+    assert(mapped.sourcePhonemes == event.sourcePhonemes);
+    assert(mapped.candidates.size() == 4);
+    assert(mapped.candidates[0].alias == "C4_ka_C4");
+    assert(mapped.candidates[0].reason == "prefixMap");
+    assert(mapped.candidates[1].alias == "C4_ga_C4");
+    assert(mapped.candidates[2].alias == "ka");
+    assert(mapped.candidates[3].alias == "ga");
+}
+
+void keepsAliasesWhenPrefixMapNoteIsMissing()
+{
+    AliasEvent event;
+    event.candidates = {{"ka", "primary"}};
+
+    const auto prefixMap = parsePrefixMapContent("C4\tC4_\t_C4\n");
+    const auto mapped = applyPrefixMapToAliasEvent(event, prefixMap, "G4");
+
+    assert(mapped.candidates.size() == 1);
+    assert(mapped.candidates[0].alias == "ka");
+}
+
 void preservesHighByteAliasesForLaterEncodingHandling()
 {
     const auto root = makeTempVoicebankRoot();
@@ -134,6 +169,8 @@ int main()
     recursivelyScansMultipleOtoFiles();
     canScanOnlyTopLevelWhenRequested();
     parsesPrefixMapFormats();
+    appliesPrefixMapToAliasCandidates();
+    keepsAliasesWhenPrefixMapNoteIsMissing();
     preservesHighByteAliasesForLaterEncodingHandling();
     reportsMissingVoicebankFolder();
 

@@ -24,7 +24,7 @@ The repository currently contains the first phoneme mapping slice:
 - Voicebank folder scanning for recursive `oto.ini` discovery, relative sample
   path normalization, and alias-index construction from user-provided banks.
 - Prefix map discovery/parsing for future multipitch prefix/suffix alias
-  selection.
+  selection and prefix/suffix-aware alias candidate expansion.
 - Latency budget presets and end-to-end monitoring latency breakdowns for
   analysis, stabilization, render scheduling, and device latency.
 - App preset settings for audio routing, voicebank selection, pitch behavior,
