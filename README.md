@@ -46,6 +46,10 @@ The repository currently contains the first phoneme mapping slice:
 
 ## Build
 
+Requires CMake **3.22+** (JUCE’s build scripts). The **Voice2VocalSynth** target is a JUCE standalone shell
+(Windows). To skip fetching JUCE (core library and tests only), configure with
+`-DVOICE2VOCALSYNTH_BUILD_JUCE_APP=OFF`.
+
 ```sh
 cmake -S . -B build
 cmake --build build

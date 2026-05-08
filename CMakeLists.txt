@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.22)
 
 project(Voice2VocalSynth
     VERSION 0.1.0
@@ -6,6 +6,7 @@ project(Voice2VocalSynth
     LANGUAGES CXX)
 
 option(VOICE2VOCALSYNTH_BUILD_TESTS "Build Voice2VocalSynth tests" ON)
+option(VOICE2VOCALSYNTH_BUILD_JUCE_APP "Build JUCE standalone shell (fetches JUCE)" ON)
 
 add_library(Voice2VocalSynthCore
     src/AppSettings.cpp
@@ -24,6 +25,16 @@ target_include_directories(Voice2VocalSynthCore
         ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 target_compile_features(Voice2VocalSynthCore PUBLIC cxx_std_20)
+
+if(VOICE2VOCALSYNTH_BUILD_JUCE_APP)
+    include(FetchContent)
+    FetchContent_Declare(
+        JUCE
+        GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
+        GIT_TAG 8.0.4)
+    FetchContent_MakeAvailable(JUCE)
+    add_subdirectory(apps/juce-shell)
+endif()
 
 if(VOICE2VOCALSYNTH_BUILD_TESTS)
     enable_testing()
