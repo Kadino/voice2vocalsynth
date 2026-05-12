@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cmath>
 #include <limits>
 #include <stdexcept>
@@ -195,6 +196,99 @@ std::string PitchTargetCalculator::midiNoteName(int midiNote)
 std::vector<int> PitchTargetCalculator::scaleIntervals(ScaleType scale)
 {
     return scaleIntervalsFor(scale);
+}
+
+namespace
+{
+
+[[nodiscard]] int letterToPitchClass(unsigned char letter)
+{
+    switch (std::tolower(static_cast<int>(letter))) {
+        case 'c':
+            return 0;
+        case 'd':
+            return 2;
+        case 'e':
+            return 4;
+        case 'f':
+            return 5;
+        case 'g':
+            return 7;
+        case 'a':
+            return 9;
+        case 'b':
+            return 11;
+        default:
+            return -1;
+    }
+}
+
+} // namespace
+
+std::optional<double> PitchTargetCalculator::tryParseNoteNameToMidi(std::string_view name)
+{
+    while (!name.empty() && std::isspace(static_cast<unsigned char>(name.front()))) {
+        name.remove_prefix(1);
+    }
+    while (!name.empty() && std::isspace(static_cast<unsigned char>(name.back()))) {
+        name.remove_suffix(1);
+    }
+    if (name.empty()) {
+        return std::nullopt;
+    }
+
+    std::size_t i = 0;
+    const int letter = letterToPitchClass(static_cast<unsigned char>(name[i]));
+    if (letter < 0) {
+        return std::nullopt;
+    }
+    ++i;
+
+    int pitchClass = letter;
+    if (i < name.size()) {
+        if (name[i] == '#') {
+            pitchClass = (pitchClass + 1) % 12;
+            ++i;
+        } else if (name[i] == 'b') {
+            pitchClass = (pitchClass + 11) % 12;
+            ++i;
+        }
+    }
+
+    if (i >= name.size()) {
+        return std::nullopt;
+    }
+
+    int sign = 1;
+    if (name[i] == '-') {
+        sign = -1;
+        ++i;
+    }
+
+    if (i >= name.size() || !std::isdigit(static_cast<unsigned char>(name[i]))) {
+        return std::nullopt;
+    }
+
+    long octave = 0;
+    while (i < name.size() && std::isdigit(static_cast<unsigned char>(name[i]))) {
+        octave = octave * 10L + static_cast<long>(name[i] - '0');
+        ++i;
+    }
+
+    if (i != name.size()) {
+        return std::nullopt;
+    }
+
+    octave *= sign;
+    if (octave < -1L || octave > 11L) {
+        return std::nullopt;
+    }
+
+    const auto midi = static_cast<double>((octave + 1L) * 12L + static_cast<long>(pitchClass));
+    if (midi < 0.0 || midi > 127.0) {
+        return std::nullopt;
+    }
+    return midi;
 }
 
 double PitchTargetCalculator::chooseSourceFrequency(const PitchInput& input, PitchTarget& target) const

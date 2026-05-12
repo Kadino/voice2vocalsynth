@@ -1,6 +1,8 @@
+#include <Voice2VocalSynth/PitchTarget.h>
 #include <Voice2VocalSynth/VoicebankScanner.h>
 
 #include <cassert>
+#include <cmath>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -25,6 +27,35 @@ void writeTextFile(const std::filesystem::path& path, const std::string& text)
     std::filesystem::create_directories(path.parent_path());
     std::ofstream output(path, std::ios::binary);
     output << text;
+}
+
+void infersBankRootPitchFromPrefixMapMedian()
+{
+    const auto root = makeTempVoicebankRoot();
+    writeTextFile(root / "oto.ini", "ka.wav=ka,0,80,180,25,5\n");
+    writeTextFile(root / "prefix.map",
+                   "A3\t\t_A3\n"
+                   "C4\tC4_\t_C4\n"
+                   "E5\tE5_\t_E5\n");
+
+    const auto scan = VoicebankScanner::scan(root);
+    assert(scan.hasBankRootRecordingPitch());
+    assert(scan.bankRootNoteName == "C4");
+    assert(std::abs(scan.bankRootRecordingFrequencyHz - PitchTargetCalculator::midiToFrequency(60.0)) < 0.02);
+
+    std::filesystem::remove_all(root);
+}
+
+void infersBankRootPitchFromAliasTokensWhenNoPrefixMap()
+{
+    const auto root = makeTempVoicebankRoot();
+    writeTextFile(root / "oto.ini", "ka.wav=C4_ka-CV,0,80,180,25,5\n");
+
+    const auto scan = VoicebankScanner::scan(root);
+    assert(scan.hasBankRootRecordingPitch());
+    assert(scan.bankRootNoteName == "C4");
+
+    std::filesystem::remove_all(root);
 }
 
 void recursivelyScansMultipleOtoFiles()
@@ -167,6 +198,8 @@ void reportsMissingVoicebankFolder()
 int main()
 {
     recursivelyScansMultipleOtoFiles();
+    infersBankRootPitchFromPrefixMapMedian();
+    infersBankRootPitchFromAliasTokensWhenNoPrefixMap();
     canScanOnlyTopLevelWhenRequested();
     parsesPrefixMapFormats();
     appliesPrefixMapToAliasCandidates();

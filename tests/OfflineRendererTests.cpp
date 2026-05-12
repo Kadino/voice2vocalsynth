@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <string>
 #include <vector>
 
 namespace
@@ -241,6 +242,50 @@ void offlineRendererAppliesPitchShiftAgainstSourceRecordingPitch()
     assert(diffAccum > 2.0f);
 }
 
+void offlineRendererPitchUpLoopsSustainWithoutTruncationWarning()
+{
+    const auto dir = std::filesystem::temp_directory_path() / "v2vs_offline_pitch_up_loop";
+    std::filesystem::create_directories(dir);
+    const auto wav = dir / "sustain.wav";
+    constexpr int kSr = 1000;
+    constexpr int kSamples = 1200;
+    std::vector<std::int16_t> samples(static_cast<std::size_t>(kSamples));
+    for (int i = 0; i < kSamples; ++i) {
+        const double v = std::sin(2.0 * 3.14159265358979323846 * static_cast<double>(i) / 40.0);
+        samples[static_cast<std::size_t>(i)] = static_cast<std::int16_t>(std::lround(v * 28000.0));
+    }
+    writePcmWavMono(wav, kSr, samples);
+
+    RenderPlan plan;
+    RenderEvent ev;
+    ev.alias = "s";
+    ev.wavFile = "sustain.wav";
+    ev.startTimeSeconds = 0.0;
+    ev.durationMs = 1000.0;
+    ev.otoTiming.offsetMs = 0.0;
+    ev.otoTiming.consonantMs = 0.0;
+    ev.otoTiming.cutoffMs = 0.0;
+    ev.sourceRecordingFrequencyHz = 440.0;
+    ev.targetFrequencyHz = 880.0;
+    plan.events.push_back(ev);
+
+    OfflineRenderOptions opts;
+    opts.voicebankRoot = dir;
+    opts.outputSampleRate = kSr;
+
+    const auto rendered = OfflineRenderer::render(plan, opts);
+    assert(rendered.ok);
+    for (const auto& w : rendered.warnings) {
+        assert(w.find("truncated") == std::string::npos);
+    }
+
+    float energy = 0.0f;
+    for (std::size_t i = 200; i < 800; ++i) {
+        energy += std::fabs(rendered.mono[i]);
+    }
+    assert(energy > 12.0f);
+}
+
 void offlineRendererSkipsMissingWavWithWarning()
 {
     RenderPlan plan;
@@ -268,6 +313,7 @@ int main()
     offlineRendererPlacesEventOnTimeline();
     offlineRendererOverlapCrossfadesIntoPreviousNote();
     offlineRendererAppliesPitchShiftAgainstSourceRecordingPitch();
+    offlineRendererPitchUpLoopsSustainWithoutTruncationWarning();
     pcmWavWriterRoundTrip();
     offlineRendererSkipsMissingWavWithWarning();
     return 0;

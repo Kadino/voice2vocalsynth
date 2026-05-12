@@ -419,6 +419,9 @@ void MainComponent::runOfflineRenderToFile(const juce::File& voicebankDirectory,
     Voice2VocalSynth::OfflineRenderOptions opts;
     opts.voicebankRoot = root;
     opts.outputSampleRate = 48000;
+    if (scan.hasBankRootRecordingPitch()) {
+        opts.defaultSourceRecordingFrequencyHz = scan.bankRootRecordingFrequencyHz;
+    }
     auto rendered = Voice2VocalSynth::OfflineRenderer::render(renderPlan, opts);
 
     if (!rendered.ok) {

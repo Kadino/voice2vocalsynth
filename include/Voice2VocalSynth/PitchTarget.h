@@ -1,6 +1,8 @@
 #pragma once
 
+#include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace Voice2VocalSynth
@@ -74,6 +76,10 @@ public:
     [[nodiscard]] static double midiToFrequency(double midiNote);
     [[nodiscard]] static std::string midiNoteName(int midiNote);
     [[nodiscard]] static std::vector<int> scaleIntervals(ScaleType scale);
+    /// Parses ASCII scientific pitch names such as `C4`, `Bb3`, or `F#5`. Returns
+    /// empty when `name` is not a single well-formed note token (surrounding
+    /// whitespace is ignored).
+    [[nodiscard]] static std::optional<double> tryParseNoteNameToMidi(std::string_view name);
 
 private:
     [[nodiscard]] double chooseSourceFrequency(const PitchInput& input, PitchTarget& target) const;
