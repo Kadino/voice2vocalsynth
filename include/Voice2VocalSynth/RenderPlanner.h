@@ -39,6 +39,9 @@ struct RenderEvent
     double targetFrequencyHz = 0.0;
     double targetMidi = 0.0;
     std::string targetNoteName;
+    /// Fundamental frequency (Hz) at which this WAV was recorded; <= 0 means use
+    /// `OfflineRenderOptions::defaultSourceRecordingFrequencyHz` in the offline renderer.
+    double sourceRecordingFrequencyHz = 0.0;
     bool usedPrefixMapCandidate = false;
     bool usedPartialFallback = false;
 };

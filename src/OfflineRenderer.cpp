@@ -1,6 +1,7 @@
 #include "Voice2VocalSynth/OfflineRenderer.h"
 
 #include "Voice2VocalSynth/PcmWavReader.h"
+#include "Voice2VocalSynth/PitchTarget.h"
 
 #include <algorithm>
 #include <cmath>
@@ -43,6 +44,32 @@ namespace
     }
     const double s = std::ceil(durationMs * static_cast<double>(sampleRate) / 1000.0);
     return static_cast<std::size_t>(std::max(1.0, s));
+}
+
+[[nodiscard]] double effectiveSourceRecordingHz(double eventHz, double optionHz)
+{
+    if (std::isfinite(eventHz) && eventHz > 0.0) {
+        return eventHz;
+    }
+    if (std::isfinite(optionHz) && optionHz > 0.0) {
+        return optionHz;
+    }
+    return PitchTargetCalculator::midiToFrequency(60.0);
+}
+
+[[nodiscard]] double pitchShiftRatio(double targetHz, double sourceHz)
+{
+    if (!std::isfinite(targetHz) || targetHz <= 0.0) {
+        return 1.0;
+    }
+    if (!std::isfinite(sourceHz) || sourceHz <= 0.0) {
+        return 1.0;
+    }
+    const double r = targetHz / sourceHz;
+    if (!std::isfinite(r) || r <= 0.0) {
+        return 1.0;
+    }
+    return r;
 }
 
 } // namespace
@@ -98,7 +125,19 @@ OfflineRenderResult OfflineRenderer::render(const RenderPlan& plan, const Offlin
             static_cast<double>(src.size()) - static_cast<double>(rightTrimSamples);
         const double regionLen = std::max(0.0, endSampleD - startSampleD);
 
+        const double sourceHz = effectiveSourceRecordingHz(event.sourceRecordingFrequencyHz,
+                                                           options.defaultSourceRecordingFrequencyHz);
+        const double targetHz =
+            (std::isfinite(event.targetFrequencyHz) && event.targetFrequencyHz > 0.0)
+                ? event.targetFrequencyHz
+                : sourceHz;
+        const double pitchRatio = pitchShiftRatio(targetHz, sourceHz);
+
         const std::size_t outEventSamples = durationSamples(event.durationMs, result.sampleRate);
+        const double srcStep = (regionLen > 1.0e-6 && outEventSamples > 0)
+            ? (regionLen / static_cast<double>(outEventSamples)) * pitchRatio
+            : 0.0;
+
         std::size_t outOffset = static_cast<std::size_t>(
             std::max(0.0, std::floor(event.startTimeSeconds * static_cast<double>(result.sampleRate))));
 
@@ -116,6 +155,16 @@ OfflineRenderResult OfflineRenderer::render(const RenderPlan& plan, const Offlin
             }
         }
 
+        if (srcStep > 0.0 && outEventSamples > 0) {
+            const double lastSrc = startSampleD + srcStep * static_cast<double>(outEventSamples - 1u);
+            if (lastSrc > endSampleD - 1.0e-6) {
+                std::ostringstream w;
+                w << "pitch shift for alias=\"" << event.alias
+                  << "\" reads past oto region end (truncated tail)";
+                result.warnings.push_back(w.str());
+            }
+        }
+
         for (std::size_t j = 0; j < outEventSamples; ++j) {
             const std::size_t dst = outOffset + j;
             if (dst >= result.mono.size()) {
@@ -123,9 +172,8 @@ OfflineRenderResult OfflineRenderer::render(const RenderPlan& plan, const Offlin
             }
 
             float sample = 0.0f;
-            if (regionLen > 1.0e-6) {
-                const double srcIndex =
-                    startSampleD + (static_cast<double>(j) * regionLen) / static_cast<double>(outEventSamples);
+            if (srcStep > 0.0) {
+                const double srcIndex = startSampleD + static_cast<double>(j) * srcStep;
                 sample = sampleLinear(src, srcIndex);
             }
 

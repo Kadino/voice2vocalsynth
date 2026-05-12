@@ -3,6 +3,7 @@
 #include <Voice2VocalSynth/PcmWavWriter.h>
 
 #include <cassert>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -178,6 +179,68 @@ void offlineRendererOverlapCrossfadesIntoPreviousNote()
     }
 }
 
+void offlineRendererAppliesPitchShiftAgainstSourceRecordingPitch()
+{
+    const auto dir = std::filesystem::temp_directory_path() / "v2vs_offline_pitch_test";
+    std::filesystem::create_directories(dir);
+    const auto wav = dir / "periodic.wav";
+    constexpr int kSr = 1000;
+    constexpr int kSamples = 500;
+    std::vector<std::int16_t> samples(static_cast<std::size_t>(kSamples));
+    for (int i = 0; i < kSamples; ++i) {
+        const double v = std::sin(2.0 * 3.14159265358979323846 * static_cast<double>(i) / 50.0);
+        samples[static_cast<std::size_t>(i)] = static_cast<std::int16_t>(std::lround(v * 30000.0));
+    }
+    writePcmWavMono(wav, kSr, samples);
+
+    auto nearEqual = [](float a, float b) { return std::fabs(a - b) < 0.04f; };
+
+    OfflineRenderOptions opts;
+    opts.voicebankRoot = dir;
+    opts.outputSampleRate = kSr;
+
+    RenderPlan planIdentity;
+    RenderEvent evIdentity;
+    evIdentity.alias = "p";
+    evIdentity.wavFile = "periodic.wav";
+    evIdentity.startTimeSeconds = 0.0;
+    evIdentity.durationMs = 500.0;
+    evIdentity.otoTiming.offsetMs = 0.0;
+    evIdentity.otoTiming.cutoffMs = 0.0;
+    evIdentity.sourceRecordingFrequencyHz = 440.0;
+    evIdentity.targetFrequencyHz = 440.0;
+    planIdentity.events.push_back(evIdentity);
+
+    const auto renderedIdentity = OfflineRenderer::render(planIdentity, opts);
+    assert(renderedIdentity.ok);
+    assert(renderedIdentity.warnings.empty());
+    for (int j = 3; j < 20; ++j) {
+        const auto a = static_cast<std::size_t>(j);
+        const auto b = static_cast<std::size_t>(j + 50);
+        assert(nearEqual(renderedIdentity.mono[a], renderedIdentity.mono[b]));
+    }
+
+    RenderPlan planShiftDown;
+    RenderEvent evShiftDown = evIdentity;
+    evShiftDown.targetFrequencyHz = 220.0;
+    planShiftDown.events.push_back(evShiftDown);
+
+    const auto renderedShiftDown = OfflineRenderer::render(planShiftDown, opts);
+    assert(renderedShiftDown.ok);
+    assert(renderedShiftDown.warnings.empty());
+    for (int j = 3; j < 15; ++j) {
+        const auto a = static_cast<std::size_t>(j);
+        const auto b = static_cast<std::size_t>(j + 100);
+        assert(nearEqual(renderedShiftDown.mono[a], renderedShiftDown.mono[b]));
+    }
+
+    float diffAccum = 0.0f;
+    for (std::size_t i = 0; i < 80; ++i) {
+        diffAccum += std::fabs(renderedIdentity.mono[i] - renderedShiftDown.mono[i]);
+    }
+    assert(diffAccum > 2.0f);
+}
+
 void offlineRendererSkipsMissingWavWithWarning()
 {
     RenderPlan plan;
@@ -204,6 +267,7 @@ int main()
     pcmWavReaderLoadsMono();
     offlineRendererPlacesEventOnTimeline();
     offlineRendererOverlapCrossfadesIntoPreviousNote();
+    offlineRendererAppliesPitchShiftAgainstSourceRecordingPitch();
     pcmWavWriterRoundTrip();
     offlineRendererSkipsMissingWavWithWarning();
     return 0;

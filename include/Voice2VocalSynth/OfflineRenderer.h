@@ -13,6 +13,9 @@ struct OfflineRenderOptions
 {
     std::filesystem::path voicebankRoot;
     int outputSampleRate = 48000;
+    /// When a render event does not set `RenderEvent::sourceRecordingFrequencyHz`, this is the
+    /// assumed fundamental frequency at which the bank samples were recorded (UTAU banks vary).
+    double defaultSourceRecordingFrequencyHz = 261.6255653005986; // 12-TET MIDI 60 (C4).
 };
 
 struct OfflineRenderResult
