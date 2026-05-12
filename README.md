@@ -38,7 +38,10 @@ The repository currently contains the first phoneme mapping slice:
 - Offline renderer v1: 16-bit PCM WAV load (mono/stereo to mono), oto
   offset/cutoff region extract, linear time-stretch to event duration, timeline
   mix into a float buffer, and UTAU-style **overlap** into the previous note
-  with a linear crossfade (no pitch shift yet).
+  with a linear crossfade. **Target pitch** is applied by resampling the oto
+  region against an assumed recording fundamental (`RenderEvent` override or
+  `OfflineRenderOptions::defaultSourceRecordingFrequencyHz`, default C4);
+  this is naive linear resampling (no separate timbre-preserving shifter yet).
 - 16-bit mono PCM WAV export (`PcmWavWriter`) for offline renders; JUCE shell
   includes an **Offline render test** flow with phrase **ARPABET** and **note**
   fields persisted in `shell_settings.json` (`offlinePhonemes`, `offlineNote`).
