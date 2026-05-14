@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <filesystem>
 #include <iomanip>
 #include <map>
 #include <sstream>
@@ -553,6 +554,20 @@ AppSettingsValidation AppSettingsValidator::validate(const AppPreset& preset,
         validation.errors.emplace_back("Auto-capture requires a private data folder");
     }
 
+    if (preset.phonemeOnnx.enabled) {
+        if (!preset.phonemeOnnx.useRepositoryTestFixture && trim(preset.phonemeOnnx.modelPath).empty()) {
+            validation.errors.emplace_back(
+                "Phoneme ONNX is enabled: set modelPath to an external .onnx file, or enable useRepositoryTestFixture.");
+        }
+        const auto resolved = resolvedPhonemeOnnxModelPath(preset);
+        if (!resolved) {
+            validation.errors.emplace_back("Phoneme ONNX is enabled but the model path could not be resolved.");
+        } else if (!std::filesystem::exists(*resolved)) {
+            validation.errors.emplace_back("Phoneme ONNX is enabled but the resolved model file does not exist: " +
+                                           resolved->generic_string());
+        }
+    }
+
     if (!trim(repositoryRoot).empty() && !trim(preset.recording.privateDataFolder).empty() &&
         pathIsInsideDirectory(preset.recording.privateDataFolder, repositoryRoot)) {
         validation.errors.emplace_back("Private recording data folder must not be inside the Git repository");
@@ -563,6 +578,24 @@ AppSettingsValidation AppSettingsValidator::validate(const AppPreset& preset,
     }
 
     return validation;
+}
+
+std::optional<std::filesystem::path> AppSettingsValidator::resolvedPhonemeOnnxModelPath(const AppPreset& preset)
+{
+    if (!preset.phonemeOnnx.enabled) {
+        return std::nullopt;
+    }
+
+    if (preset.phonemeOnnx.useRepositoryTestFixture) {
+        return std::filesystem::path{VOICE2VOCALSYNTH_REPOSITORY_PHONEME_ONNX_FIXTURE};
+    }
+
+    const auto trimmed = trim(preset.phonemeOnnx.modelPath);
+    if (trimmed.empty()) {
+        return std::nullopt;
+    }
+
+    return std::filesystem::path{trimmed};
 }
 
 bool AppSettingsValidator::pathIsInsideDirectory(const std::string& path,
@@ -621,6 +654,12 @@ std::string AppPresetJson::toJson(const AppPreset& preset)
     json << "    \"phonemeStabilizationMs\": " << preset.latency.phonemeStabilizationMs << ",\n";
     json << "    \"pitchSmoothingMs\": " << preset.latency.pitchSmoothingMs << ",\n";
     json << "    \"renderQueueMs\": " << preset.latency.renderQueueMs << "\n";
+    json << "  },\n";
+    json << "  \"phonemeOnnx\": {\n";
+    json << "    \"enabled\": " << (preset.phonemeOnnx.enabled ? "true" : "false") << ",\n";
+    json << "    \"useRepositoryTestFixture\": " << (preset.phonemeOnnx.useRepositoryTestFixture ? "true" : "false")
+         << ",\n";
+    json << "    \"modelPath\": \"" << escapeJsonString(preset.phonemeOnnx.modelPath) << "\"\n";
     json << "  },\n";
     json << "  \"recording\": {\n";
     json << "    \"privateDataFolder\": \"" << escapeJsonString(preset.recording.privateDataFolder) << "\",\n";
@@ -691,6 +730,13 @@ AppPreset AppPresetJson::fromJson(std::string_view jsonText)
                                                             preset.latency.phonemeStabilizationMs);
         preset.latency.pitchSmoothingMs = numberValue(*latency, "pitchSmoothingMs", preset.latency.pitchSmoothingMs);
         preset.latency.renderQueueMs = numberValue(*latency, "renderQueueMs", preset.latency.renderQueueMs);
+    }
+
+    if (const auto* phonemeOnnx = childObject(*rootObject, "phonemeOnnx")) {
+        preset.phonemeOnnx.enabled = boolValue(*phonemeOnnx, "enabled", preset.phonemeOnnx.enabled);
+        preset.phonemeOnnx.useRepositoryTestFixture =
+            boolValue(*phonemeOnnx, "useRepositoryTestFixture", preset.phonemeOnnx.useRepositoryTestFixture);
+        preset.phonemeOnnx.modelPath = stringValue(*phonemeOnnx, "modelPath", preset.phonemeOnnx.modelPath);
     }
 
     if (const auto* recording = childObject(*rootObject, "recording")) {

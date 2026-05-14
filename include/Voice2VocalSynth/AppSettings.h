@@ -3,6 +3,8 @@
 #include "Voice2VocalSynth/LatencyBudget.h"
 #include "Voice2VocalSynth/PitchTarget.h"
 
+#include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -43,6 +45,13 @@ struct RecordingSettings
     bool recordAliasCsv = true;
 };
 
+struct PhonemeOnnxSettings
+{
+    bool enabled = false;
+    bool useRepositoryTestFixture = false;
+    std::string modelPath;
+};
+
 struct AppPreset
 {
     int schemaVersion = 1;
@@ -52,6 +61,7 @@ struct AppPreset
     PitchTargetOptions pitch;
     AnalysisLatencySettings latency = LatencyBudgetCalculator::presetSettings(LatencyPreset::Balanced);
     RecordingSettings recording;
+    PhonemeOnnxSettings phonemeOnnx;
 };
 
 struct AppSettingsValidation
@@ -70,6 +80,7 @@ public:
     [[nodiscard]] static bool pathIsInsideDirectory(const std::string& path,
                                                     const std::string& directory);
     [[nodiscard]] static AppPreset makeDefaultPreset();
+    [[nodiscard]] static std::optional<std::filesystem::path> resolvedPhonemeOnnxModelPath(const AppPreset& preset);
 };
 
 class AppPresetJson
