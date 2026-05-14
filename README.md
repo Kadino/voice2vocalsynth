@@ -21,6 +21,11 @@ The repository currently contains the first phoneme mapping slice:
 - Equal-temperament pitch target calculation with raw follow, semitone snap,
   key snap, fixed/default pitch, octave shifting, snap strength, and
   low-confidence fallback handling.
+- Optional **ONNX Runtime** integration (`PhonemeOnnxRunner`, CMake
+  `VOICE2VOCALSYNTH_WITH_ONNX`): loads a model and runs CPU inference; Linux x64
+  can auto-download Microsoft ONNX Runtime **1.26.x** (see `cmake/OnnxRuntime.cmake`),
+  or set `VOICE2VOCALSYNTH_ONNXRUNTIME_ROOT` to an extracted tree. See
+  `tests/fixtures/onnx/PROVENANCE.md` for the checked-in dummy ONNX used in tests.
 - Recent reliable pitch tracking for low-confidence fallback means.
 - Basic `oto.ini` parsing for UTAU voicebank aliases and timing fields.
 - Voicebank alias resolution that chooses the first available mapper candidate
@@ -63,7 +68,10 @@ The repository currently contains the first phoneme mapping slice:
 
 Requires CMake **3.22+** (JUCE’s build scripts). The **Voice2VocalSynth** target is a JUCE standalone shell
 (Windows). To skip fetching JUCE (core library and tests only), configure with
-`-DVOICE2VOCALSYNTH_BUILD_JUCE_APP=OFF`.
+`-DVOICE2VOCALSYNTH_BUILD_JUCE_APP=OFF`. To skip ONNX Runtime (stub phoneme runner
+only), use `-DVOICE2VOCALSYNTH_WITH_ONNX=OFF`. On non-Linux hosts or when
+auto-download is disabled, set `-DVOICE2VOCALSYNTH_ONNXRUNTIME_ROOT` to an
+extracted official ONNX Runtime tree (`include/` + `lib/`).
 
 ```sh
 cmake -S . -B build
