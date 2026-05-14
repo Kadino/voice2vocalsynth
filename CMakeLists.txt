@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.22)
 project(Voice2VocalSynth
     VERSION 0.1.0
     DESCRIPTION "Live voice-to-UTAU vocal synthesis experiments"
-    LANGUAGES CXX)
+    LANGUAGES C CXX)
 
 option(VOICE2VOCALSYNTH_BUILD_TESTS "Build Voice2VocalSynth tests" ON)
 option(VOICE2VOCALSYNTH_BUILD_JUCE_APP "Build JUCE standalone shell (fetches JUCE)" ON)
@@ -30,6 +30,7 @@ add_library(Voice2VocalSynthCore
     src/PitchHistory.cpp
     src/PitchTarget.cpp
     src/RenderPlanner.cpp
+    src/SimplePitchEstimator.cpp
     src/VoicebankAliasIndex.cpp
     src/VoicebankMappingPlanner.cpp
     src/VoicebankScanner.cpp)
@@ -90,6 +91,15 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
             Voice2VocalSynthCore)
 
     add_test(NAME PitchTargetTests COMMAND PitchTargetTests)
+
+    add_executable(SimplePitchEstimatorTests
+        tests/SimplePitchEstimatorTests.cpp)
+
+    target_link_libraries(SimplePitchEstimatorTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    add_test(NAME SimplePitchEstimatorTests COMMAND SimplePitchEstimatorTests)
 
     add_executable(PitchHistoryTests
         tests/PitchHistoryTests.cpp)

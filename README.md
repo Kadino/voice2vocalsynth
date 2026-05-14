@@ -5,7 +5,7 @@ voice-to-UTAU vocal synthesis experiments.
 
 ## Canonical project specification (agent-parseable)
 
-See [`voice2vocalsynth.spec.md`](voice2vocalsynth.spec.md). The **YAML frontmatter** in that file is the canonical, machine-parseable source of truth for project direction, pipeline, latency modes, detection design, and renderer plans.
+See [`voice2vocalsynth.spec.md`](voice2vocalsynth.spec.md). The **YAML frontmatter** in that file is the canonical, machine-parseable source of truth for project direction, pipeline, latency modes, detection design, and renderer plans. For the **live pipeline implementation roadmap** (milestones, gaps, next steps), see [`docs/live-pipeline-roadmap.md`](docs/live-pipeline-roadmap.md).
 
 ## Current core module
 
@@ -69,6 +69,10 @@ The repository currently contains the first phoneme mapping slice:
   latency mode, and recording/debug options.
 - Editable JSON preset import/export for the settings model. The UI can use the
   same model while users can still edit preset files by hand.
+- **Live pipeline MVP (JUCE shell):** mono capture buffer from the audio I/O callback,
+  block **pitch** estimates (`SimplePitchEstimator` → `RecentPitchTracker` →
+  `PitchTargetCalculator`), optional throttled **ONNX identity** jobs via
+  `PhonemeOnnxAsyncRunner`, and a scrolling **JSON line log** for inspection.
 
 ## Build
 
@@ -86,6 +90,8 @@ cmake -S . -B build
 cmake --build build
 ctest --test-dir build
 ```
+
+On **Linux**, building the JUCE shell may require development packages for **GTK 3**, **WebKitGTK 4.1**, **libcurl**, **ALSA**, **X11**, **FreeType**, and **OpenGL** (the CI image here links `PkgConfig::gtk+-3.0`, `webkit2gtk-4.1`, and `libcurl` explicitly in `apps/juce-shell/CMakeLists.txt` after JUCE’s own dependency probe).
 
 ## License
 
