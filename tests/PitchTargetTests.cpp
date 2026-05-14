@@ -167,10 +167,22 @@ void snapStrengthBlendsInMidiSpace()
     assert(nearlyEqual(PitchTargetCalculator::frequencyToMidi(target.targetFrequencyHz), 69.2));
 }
 
+void parsesAsciiNoteNamesToMidi()
+{
+    assert(PitchTargetCalculator::tryParseNoteNameToMidi("C4").value() == 60.0);
+    assert(PitchTargetCalculator::tryParseNoteNameToMidi("  Bb3 ").value() == 58.0);
+    assert(PitchTargetCalculator::tryParseNoteNameToMidi("F#5").value() == 78.0);
+    assert(PitchTargetCalculator::tryParseNoteNameToMidi("B4").value() == 71.0);
+    assert(!PitchTargetCalculator::tryParseNoteNameToMidi("x4"));
+    assert(!PitchTargetCalculator::tryParseNoteNameToMidi("C"));
+    assert(!PitchTargetCalculator::tryParseNoteNameToMidi(""));
+}
+
 } // namespace
 
 int main()
 {
+    parsesAsciiNoteNamesToMidi();
     convertsFrequencyToMidiAndBack();
     followsInputPitchByDefault();
     snapsToNearestSemitone();

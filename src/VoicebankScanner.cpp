@@ -1,6 +1,9 @@
 #include "Voice2VocalSynth/VoicebankScanner.h"
 
+#include "Voice2VocalSynth/PitchTarget.h"
+
 #include <algorithm>
+#include <cmath>
 #include <cctype>
 #include <fstream>
 #include <iterator>
@@ -142,6 +145,72 @@ bool VoicebankScanResult::foundPrefixMap() const noexcept
 {
     return !prefixMapFiles.empty();
 }
+
+bool VoicebankScanResult::hasBankRootRecordingPitch() const noexcept
+{
+    return bankRootRecordingFrequencyHz > 0.0 && bankRootRecordingFrequencyHz == bankRootRecordingFrequencyHz;
+}
+
+namespace
+{
+
+[[nodiscard]] double medianValue(std::vector<double> values)
+{
+    if (values.empty()) {
+        return 0.0;
+    }
+    std::sort(values.begin(), values.end());
+    const auto n = values.size();
+    if ((n % 2u) == 1u) {
+        return values[n / 2u];
+    }
+    return 0.5 * (values[n / 2u - 1u] + values[n / 2u]);
+}
+
+void collectNoteMidisFromAliases(const std::vector<OtoEntry>& entries, std::vector<double>& outMidis)
+{
+    for (const auto& entry : entries) {
+        const auto& alias = entry.alias;
+        for (std::size_t start = 0; start < alias.size(); ++start) {
+            const auto maxLen = std::min<std::size_t>(8, alias.size() - start);
+            for (auto len = maxLen; len >= 2; --len) {
+                if (const auto parsed = PitchTargetCalculator::tryParseNoteNameToMidi(
+                        std::string_view(alias).substr(start, len))) {
+                    outMidis.push_back(*parsed);
+                    break;
+                }
+            }
+        }
+    }
+}
+
+void inferBankRootRecordingPitch(VoicebankScanResult& result)
+{
+    std::vector<double> midis;
+    midis.reserve(result.prefixMapEntries.size() + 8);
+    for (const auto& entry : result.prefixMapEntries) {
+        if (const auto parsed = PitchTargetCalculator::tryParseNoteNameToMidi(entry.noteName)) {
+            midis.push_back(*parsed);
+        }
+    }
+    if (midis.empty()) {
+        collectNoteMidisFromAliases(result.entries, midis);
+    }
+    if (midis.empty()) {
+        return;
+    }
+
+    const double medianMidi = medianValue(std::move(midis));
+    if (medianMidi != medianMidi) {
+        return;
+    }
+
+    const auto rounded = static_cast<int>(std::round(medianMidi));
+    result.bankRootRecordingFrequencyHz = PitchTargetCalculator::midiToFrequency(static_cast<double>(rounded));
+    result.bankRootNoteName = PitchTargetCalculator::midiNoteName(rounded);
+}
+
+} // namespace
 
 std::vector<VoicebankPrefixMapEntry> parsePrefixMapContent(std::string_view content,
                                                            std::string sourceName)
@@ -323,6 +392,7 @@ VoicebankScanResult VoicebankScanner::scan(const std::filesystem::path& rootPath
     }
 
     result.aliasIndex = buildVoicebankAliasIndex(result.entries);
+    inferBankRootRecordingPitch(result);
     return result;
 }
 

@@ -27,8 +27,10 @@ The repository currently contains the first phoneme mapping slice:
   and reports missing candidates for UI/debug output.
 - Voicebank alias style is auto-detected from the loaded alias inventory.
 - Voicebank folder scanning for recursive `oto.ini` discovery, relative sample
-  path normalization, and alias-index construction from user-provided banks.
-- Prefix map discovery/parsing for future multipitch prefix/suffix alias
+  path normalization, alias-index construction, and an inferred **bank root
+  recording pitch** (median of `prefix.map` note names, else ASCII note tokens
+  in aliases such as `C4_ka`) exposed on `VoicebankScanResult` for render defaults.
+- Prefix map discovery/parsing for multipitch prefix/suffix alias
   selection and prefix/suffix-aware alias candidate expansion.
 - Voicebank mapping planning that combines ARPABET mapping, prefix/suffix
   expansion, alias resolution, and missing-alias diagnostics.
@@ -38,10 +40,13 @@ The repository currently contains the first phoneme mapping slice:
 - Offline renderer v1: 16-bit PCM WAV load (mono/stereo to mono), oto
   offset/cutoff region extract, linear time-stretch to event duration, timeline
   mix into a float buffer, and UTAU-style **overlap** into the previous note
-  with a linear crossfade. **Target pitch** is applied by resampling the oto
-  region against an assumed recording fundamental (`RenderEvent` override or
-  `OfflineRenderOptions::defaultSourceRecordingFrequencyHz`, default C4);
-  this is naive linear resampling (no separate timbre-preserving shifter yet).
+  with a linear crossfade. **Target pitch** uses naive linear resampling against
+  an assumed recording fundamental (`RenderEvent` override,
+  `OfflineRenderOptions::defaultSourceRecordingFrequencyHz`, or the scanned bank
+  root in the JUCE offline test). **Pitch-up** uses a consonant pass, a
+  **looped sustain** band inside the oto window (after `consonantMs`, reserving
+  an inner tail), then a one-shot **trailing** read; otherwise the legacy linear
+  path applies (with truncation warnings when the read passes cutoff).
 - 16-bit mono PCM WAV export (`PcmWavWriter`) for offline renders; JUCE shell
   includes an **Offline render test** flow with phrase **ARPABET** and **note**
   fields persisted in `shell_settings.json` (`offlinePhonemes`, `offlineNote`).

@@ -35,10 +35,17 @@ struct VoicebankScanResult
     std::vector<VoicebankPrefixMapEntry> prefixMapEntries;
     std::vector<std::string> warnings;
     VoicebankAliasIndex aliasIndex;
+    /// Median registration pitch inferred from prefix.map note names, or from
+    /// note-like tokens embedded in aliases when no prefix map pitches exist.
+    /// Zero means unknown (callers keep their own default, e.g. C4).
+    double bankRootRecordingFrequencyHz = 0.0;
+    /// Populated when `bankRootRecordingFrequencyHz` is set; useful for UI/debug.
+    std::string bankRootNoteName;
 
     [[nodiscard]] VoicebankAliasStyle aliasStyle() const noexcept;
     [[nodiscard]] bool foundOtoIni() const noexcept;
     [[nodiscard]] bool foundPrefixMap() const noexcept;
+    [[nodiscard]] bool hasBankRootRecordingPitch() const noexcept;
 };
 
 struct VoicebankPrefixMapMatch
