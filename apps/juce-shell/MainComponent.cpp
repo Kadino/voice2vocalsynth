@@ -332,6 +332,7 @@ void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* device)
     liveSamplesSeen_.store(0, std::memory_order_relaxed);
     phonemeThrottleCounter_ = 0;
     pitchTracker_.clear();
+    phonemeStabilizer_.reset();
     if (device != nullptr) {
         liveSampleRateHz_ = device->getCurrentSampleRate();
     }
@@ -495,6 +496,30 @@ void MainComponent::livePipelineTimerTick()
     line.precision(5);
     line << "{\"kind\":\"pitch\",\"t\":" << streamSec << ",\"f0_hz\":" << est.frequencyHz
          << ",\"conf\":" << est.confidence << ",\"target_midi\":" << target.targetMidi << "}";
+
+    {
+        Voice2VocalSynth::PhonemeTemporalObservation ob;
+        ob.stream_time_seconds = streamSec;
+        if (est.confidence > 0.45F) {
+            ob.arpabet = "AH";
+            ob.confidence = est.confidence;
+        } else {
+            ob.arpabet.clear();
+            ob.confidence = 0.0F;
+        }
+        phonemeStabilizer_.observe(ob);
+    }
+    Voice2VocalSynth::PhonemeFrame phFrame;
+    while (phonemeStabilizer_.try_pop_committed(phFrame)) {
+        std::ostringstream cl;
+        cl.setf(std::ios::fixed);
+        cl.precision(5);
+        cl << "{\"kind\":\"ph_frame\",\"arpabet\":\"" << phFrame.arpabet << "\",\"conf\":" << phFrame.confidence
+           << ",\"t0\":" << phFrame.estimatedOnsetSeconds << ",\"t1\":" << phFrame.estimatedEndSeconds
+           << ",\"vowel\":" << (phFrame.isVowel ? "true" : "false")
+           << ",\"consonant\":" << (phFrame.isConsonant ? "true" : "false") << "}";
+        pushLiveLogLine(cl.str());
+    }
 
 #if defined(VOICE2VOCALSYNTH_WITH_ONNX)
     Voice2VocalSynth::PhonemeOnnxAsyncJobOutput phonOut;
