@@ -3,6 +3,20 @@
 #include <JuceHeader.h>
 
 #include "Voice2VocalSynth/LatencyBudget.h"
+#include "Voice2VocalSynth/PitchHistory.h"
+#include "Voice2VocalSynth/PitchTarget.h"
+
+#if defined(VOICE2VOCALSYNTH_WITH_ONNX)
+#include "Voice2VocalSynth/PhonemeOnnxAsyncRunner.h"
+#endif
+
+#include <atomic>
+#include <cstdint>
+#include <deque>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <vector>
 
 class MainComponent final : public juce::Component,
                             private juce::AudioIODeviceCallback,
@@ -36,6 +50,9 @@ private:
     void saveShellSettings();
     void loadShellSettingsFromDisk();
 
+    void livePipelineTimerTick();
+    void pushLiveLogLine(const std::string& line);
+
     void offlineRenderTest();
     void runOfflineRenderToFile(const juce::File& voicebankDirectory, const juce::File& outputWavFile);
 
@@ -56,7 +73,25 @@ private:
     juce::Label e2eValueLabel_;
     juce::Label breakdownLabel_;
     juce::TextEditor breakdownEditor_;
+    juce::Label livePipelineLabel_;
+    juce::ToggleButton liveOnnxToggle_ {"ONNX stub (identity)"};
+    juce::TextEditor livePipelineLog_;
 
     Voice2VocalSynth::AnalysisLatencySettings analysisSettings_ =
         Voice2VocalSynth::LatencyBudgetCalculator::presetSettings(Voice2VocalSynth::LatencyPreset::Balanced);
+
+    std::mutex liveAudioMutex_;
+    std::vector<float> liveMonoTail_;
+    std::atomic<std::uint64_t> liveSamplesSeen_{0};
+    double liveSampleRateHz_ = 48000.0;
+    Voice2VocalSynth::RecentPitchTracker pitchTracker_;
+    Voice2VocalSynth::PitchTargetCalculator pitchCalculator_;
+    int phonemeThrottleCounter_ = 0;
+    std::deque<std::string> liveLogLines_;
+
+#if defined(VOICE2VOCALSYNTH_WITH_ONNX)
+    std::unique_ptr<Voice2VocalSynth::PhonemeOnnxAsyncRunner> phonemeAsync_;
+#endif
+
+    static constexpr int kMaxLiveLogLines = 64;
 };
