@@ -20,7 +20,7 @@ This document captures the **gap analysis and prioritized plan** agreed for Voic
 ## Milestone 2 — Temporal phoneme stabilizer
 
 - [x] State machine on top of streaming hypotheses: **min segment duration**, **candidate-stable switch** with **confidence hysteresis**, **silence dwell** before closing a segment (`phonemeDetection.temporalStabilizer` v1).
-- [x] Emit **`PhonemeFrame`**-shaped committed segments (`try_pop_committed`); JUCE shell logs them as **`ph_frame`** JSON (placeholder observations: voiced pitch → `AH` until a real ONNX head exists).
+- [x] Emit **`PhonemeFrame`**-shaped committed segments (`try_pop_committed`); JUCE shell logs them as **`ph_frame`** JSON. **Hybrid for testing (keep):** stabilizer input stays a **pitch-gated placeholder** (voiced pitch → `AH`) in parallel with the **ONNX stub** jobs (`onnx` JSON lines), so boundaries and async plumbing can be debugged before a real phoneme classifier exists.
 - [ ] Optional: write the same records to session **CSV** alongside future `phonemes.csv` (`dataStorage.recordingDebugFormat`).
 
 ## Milestone 3 — VAD + boundary timestamps

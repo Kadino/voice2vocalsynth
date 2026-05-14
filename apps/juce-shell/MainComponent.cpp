@@ -497,6 +497,9 @@ void MainComponent::livePipelineTimerTick()
     line << "{\"kind\":\"pitch\",\"t\":" << streamSec << ",\"f0_hz\":" << est.frequencyHz
          << ",\"conf\":" << est.confidence << ",\"target_midi\":" << target.targetMidi << "}";
 
+    // Hybrid testing path (intentional): pitch-gated placeholder hypotheses feed the temporal
+    // stabilizer so `ph_frame` commits can be exercised without a real phoneme ONNX head. The
+    // ONNX identity stub below remains a separate async pipeline for inference/timing checks.
     {
         Voice2VocalSynth::PhonemeTemporalObservation ob;
         ob.stream_time_seconds = streamSec;
