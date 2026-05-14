@@ -8,6 +8,8 @@ project(Voice2VocalSynth
 option(VOICE2VOCALSYNTH_BUILD_TESTS "Build Voice2VocalSynth tests" ON)
 option(VOICE2VOCALSYNTH_BUILD_JUCE_APP "Build JUCE standalone shell (fetches JUCE)" ON)
 
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/OnnxRuntime.cmake")
+
 add_library(Voice2VocalSynthCore
     src/AppSettings.cpp
     src/DebugTimeline.cpp
@@ -15,6 +17,7 @@ add_library(Voice2VocalSynthCore
     src/OfflineRenderer.cpp
     src/PcmWavReader.cpp
     src/PcmWavWriter.cpp
+    src/PhonemeOnnxRunner.cpp
     src/PhonemeFallbackMapper.cpp
     src/PitchHistory.cpp
     src/PitchTarget.cpp
@@ -28,6 +31,19 @@ target_include_directories(Voice2VocalSynthCore
         ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 target_compile_features(Voice2VocalSynthCore PUBLIC cxx_std_20)
+
+if(VOICE2VOCALSYNTH_ONNX_AVAILABLE)
+    target_compile_definitions(Voice2VocalSynthCore PUBLIC VOICE2VOCALSYNTH_WITH_ONNX=1)
+    target_include_directories(Voice2VocalSynthCore
+        PRIVATE
+            "${VOICE2VOCALSYNTH_ONNXRUNTIME_ROOT}/include")
+    target_link_libraries(Voice2VocalSynthCore
+        PRIVATE
+            "${VOICE2VOCALSYNTH_ONNXRUNTIME_LIB}")
+    if(UNIX AND NOT APPLE)
+        list(APPEND CMAKE_BUILD_RPATH "${VOICE2VOCALSYNTH_ONNXRUNTIME_ROOT}/lib")
+    endif()
+endif()
 
 if(VOICE2VOCALSYNTH_BUILD_JUCE_APP)
     include(FetchContent)
@@ -140,4 +156,17 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
             Voice2VocalSynthCore)
 
     add_test(NAME OfflineRendererTests COMMAND OfflineRendererTests)
+
+    add_executable(PhonemeOnnxRunnerTests
+        tests/PhonemeOnnxRunnerTests.cpp)
+
+    target_link_libraries(PhonemeOnnxRunnerTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    target_compile_definitions(PhonemeOnnxRunnerTests
+        PRIVATE
+            "VOICE2VOCALSYNTH_TEST_ONNX_MODEL=\"${CMAKE_SOURCE_DIR}/tests/fixtures/onnx/dummy_identity.onnx\"")
+
+    add_test(NAME PhonemeOnnxRunnerTests COMMAND PhonemeOnnxRunnerTests)
 endif()
