@@ -22,9 +22,15 @@ The repository currently contains the first phoneme mapping slice:
   key snap, fixed/default pitch, octave shifting, snap strength, and
   low-confidence fallback handling.
 - Optional **ONNX Runtime** integration (`PhonemeOnnxRunner`, CMake
-  `VOICE2VOCALSYNTH_WITH_ONNX`): loads a model and runs CPU inference; Linux x64
-  can auto-download Microsoft ONNX Runtime **1.26.x** (see `cmake/OnnxRuntime.cmake`),
-  or set `VOICE2VOCALSYNTH_ONNXRUNTIME_ROOT` to an extracted tree. See
+  `VOICE2VOCALSYNTH_WITH_ONNX`): loads a model and runs CPU inference; **Linux x64**
+  and **Windows x64** can auto-download Microsoft ONNX Runtime **1.26.x** (see
+  `cmake/OnnxRuntime.cmake`), or set `VOICE2VOCALSYNTH_ONNXRUNTIME_ROOT` to an
+  extracted tree. Windows builds copy `onnxruntime*.dll` next to linked executables.
+  `PhonemeOnnxAsyncRunner` runs inference on a worker thread and tags each result
+  with the job’s stream time plus a `steady_clock` completion time for latency
+  alignment. Preset JSON includes `phonemeOnnx` (`enabled`, `useRepositoryTestFixture`,
+  `modelPath`); CMake cache `VOICE2VOCALSYNTH_PHONEME_REPOSITORY_FIXTURE` selects the
+  in-repo dummy model path baked into the binary for that mode. See
   `tests/fixtures/onnx/PROVENANCE.md` for the checked-in dummy ONNX used in tests.
 - Recent reliable pitch tracking for low-confidence fallback means.
 - Basic `oto.ini` parsing for UTAU voicebank aliases and timing fields.
@@ -69,9 +75,11 @@ The repository currently contains the first phoneme mapping slice:
 Requires CMake **3.22+** (JUCE’s build scripts). The **Voice2VocalSynth** target is a JUCE standalone shell
 (Windows). To skip fetching JUCE (core library and tests only), configure with
 `-DVOICE2VOCALSYNTH_BUILD_JUCE_APP=OFF`. To skip ONNX Runtime (stub phoneme runner
-only), use `-DVOICE2VOCALSYNTH_WITH_ONNX=OFF`. On non-Linux hosts or when
-auto-download is disabled, set `-DVOICE2VOCALSYNTH_ONNXRUNTIME_ROOT` to an
-extracted official ONNX Runtime tree (`include/` + `lib/`).
+only), use `-DVOICE2VOCALSYNTH_WITH_ONNX=OFF`. On hosts where auto-download is not
+implemented (for example non-x64), set `VOICE2VOCALSYNTH_ONNXRUNTIME_ROOT` to an
+extracted official ONNX Runtime tree (`include/` + `lib/`). Override the checked-in
+phoneme test fixture path with `-DVOICE2VOCALSYNTH_PHONEME_REPOSITORY_FIXTURE=...`
+when pointing presets at a different `.onnx` file for development.
 
 ```sh
 cmake -S . -B build

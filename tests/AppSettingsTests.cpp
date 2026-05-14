@@ -2,6 +2,7 @@
 #include <Voice2VocalSynth/PitchTarget.h>
 
 #include <cassert>
+#include <filesystem>
 #include <iostream>
 #include <string>
 
@@ -23,12 +24,37 @@ void defaultPresetUsesSafeLiveDefaults()
     assert(preset.recording.recordTimelineJson);
     assert(preset.latency.preset == LatencyPreset::Balanced);
     assert(preset.pitch.mode == PitchMode::FollowInput);
+    assert(!preset.phonemeOnnx.enabled);
+}
+
+void resolvesRepositoryPhonemeFixtureWhenEnabled()
+{
+    auto preset = AppSettingsValidator::makeDefaultPreset();
+    preset.phonemeOnnx.enabled = true;
+    preset.phonemeOnnx.useRepositoryTestFixture = true;
+    const auto resolved = AppSettingsValidator::resolvedPhonemeOnnxModelPath(preset);
+    assert(resolved.has_value());
+    assert(std::filesystem::exists(*resolved));
 }
 
 void rejectsRecordingFolderInsideRepository()
 {
     auto preset = AppSettingsValidator::makeDefaultPreset();
     preset.recording.privateDataFolder = "/workspace/Recordings";
+
+    const auto result = AppSettingsValidator::validate(preset, "/workspace");
+
+    assert(!result.valid());
+    assert(!result.errors.empty());
+}
+
+void rejectsEnabledPhonemeOnnxWithoutModelSelection()
+{
+    auto preset = AppSettingsValidator::makeDefaultPreset();
+    preset.recording.privateDataFolder = "/home/user/AppData/Local/Voice2VocalSynth";
+    preset.phonemeOnnx.enabled = true;
+    preset.phonemeOnnx.useRepositoryTestFixture = false;
+    preset.phonemeOnnx.modelPath.clear();
 
     const auto result = AppSettingsValidator::validate(preset, "/workspace");
 
@@ -78,10 +104,14 @@ void writesAndReadsEditableJson()
     preset.pitch.defaultFrequencyHz = PitchTargetCalculator::midiToFrequency(62.0);
     preset.latency = LatencyBudgetCalculator::presetSettings(LatencyPreset::HighAccuracy);
     preset.recording.privateDataFolder = "C:/Users/me/AppData/Local/Voice2VocalSynth";
+    preset.phonemeOnnx.enabled = true;
+    preset.phonemeOnnx.useRepositoryTestFixture = false;
+    preset.phonemeOnnx.modelPath = "D:/models/phoneme.onnx";
 
     const auto json = AppPresetJson::toJson(preset);
     assert(json.find("\"voicebankPath\"") != std::string::npos);
     assert(json.find("\"snapToKey\"") != std::string::npos);
+    assert(json.find("\"phonemeOnnx\"") != std::string::npos);
 
     const auto parsed = AppPresetJson::fromJson(json);
     assert(parsed.name == "Live test");
@@ -93,6 +123,9 @@ void writesAndReadsEditableJson()
     assert(parsed.pitch.octaveShift == 1);
     assert(parsed.latency.preset == LatencyPreset::HighAccuracy);
     assert(parsed.recording.privateDataFolder == "C:/Users/me/AppData/Local/Voice2VocalSynth");
+    assert(parsed.phonemeOnnx.enabled);
+    assert(!parsed.phonemeOnnx.useRepositoryTestFixture);
+    assert(parsed.phonemeOnnx.modelPath == "D:/models/phoneme.onnx");
 }
 
 void acceptsHumanEditedPartialJson()
@@ -118,7 +151,9 @@ void acceptsHumanEditedPartialJson()
 int main()
 {
     defaultPresetUsesSafeLiveDefaults();
+    resolvesRepositoryPhonemeFixtureWhenEnabled();
     rejectsRecordingFolderInsideRepository();
+    rejectsEnabledPhonemeOnnxWithoutModelSelection();
     allowsRecordingFolderOutsideRepository();
     warnsWhenVoicebankIsNotSelected();
     detectsNestedPathsWithMixedSlashes();

@@ -8,7 +8,14 @@ project(Voice2VocalSynth
 option(VOICE2VOCALSYNTH_BUILD_TESTS "Build Voice2VocalSynth tests" ON)
 option(VOICE2VOCALSYNTH_BUILD_JUCE_APP "Build JUCE standalone shell (fetches JUCE)" ON)
 
+set(VOICE2VOCALSYNTH_PHONEME_REPOSITORY_FIXTURE "${CMAKE_SOURCE_DIR}/tests/fixtures/onnx/dummy_identity.onnx"
+    CACHE PATH "Configurable path to the repository phoneme ONNX test fixture (presets + unit tests)")
+
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/OnnxRuntime.cmake")
+
+set(_phoneme_fixture_slash "${VOICE2VOCALSYNTH_PHONEME_REPOSITORY_FIXTURE}")
+file(TO_CMAKE_PATH "${_phoneme_fixture_slash}" _phoneme_fixture_slash)
+string(REPLACE "\\" "/" _phoneme_fixture_slash "${_phoneme_fixture_slash}")
 
 add_library(Voice2VocalSynthCore
     src/AppSettings.cpp
@@ -17,6 +24,7 @@ add_library(Voice2VocalSynthCore
     src/OfflineRenderer.cpp
     src/PcmWavReader.cpp
     src/PcmWavWriter.cpp
+    src/PhonemeOnnxAsyncRunner.cpp
     src/PhonemeOnnxRunner.cpp
     src/PhonemeFallbackMapper.cpp
     src/PitchHistory.cpp
@@ -31,6 +39,10 @@ target_include_directories(Voice2VocalSynthCore
         ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 target_compile_features(Voice2VocalSynthCore PUBLIC cxx_std_20)
+
+target_compile_definitions(Voice2VocalSynthCore
+    PRIVATE
+        "VOICE2VOCALSYNTH_REPOSITORY_PHONEME_ONNX_FIXTURE=\"${_phoneme_fixture_slash}\"")
 
 if(VOICE2VOCALSYNTH_ONNX_AVAILABLE)
     target_compile_definitions(Voice2VocalSynthCore PUBLIC VOICE2VOCALSYNTH_WITH_ONNX=1)
@@ -53,6 +65,9 @@ if(VOICE2VOCALSYNTH_BUILD_JUCE_APP)
         GIT_TAG 8.0.4)
     FetchContent_MakeAvailable(JUCE)
     add_subdirectory(apps/juce-shell)
+    if(VOICE2VOCALSYNTH_ONNX_AVAILABLE)
+        voice2vocalsynth_copy_onnx_runtime_runtime_deps(Voice2VocalSynthApp)
+    endif()
 endif()
 
 if(VOICE2VOCALSYNTH_BUILD_TESTS)
@@ -166,7 +181,28 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
 
     target_compile_definitions(PhonemeOnnxRunnerTests
         PRIVATE
-            "VOICE2VOCALSYNTH_TEST_ONNX_MODEL=\"${CMAKE_SOURCE_DIR}/tests/fixtures/onnx/dummy_identity.onnx\"")
+            "VOICE2VOCALSYNTH_TEST_ONNX_MODEL=\"${_phoneme_fixture_slash}\"")
 
     add_test(NAME PhonemeOnnxRunnerTests COMMAND PhonemeOnnxRunnerTests)
+
+    if(VOICE2VOCALSYNTH_ONNX_AVAILABLE)
+        voice2vocalsynth_copy_onnx_runtime_runtime_deps(PhonemeOnnxRunnerTests)
+    endif()
+
+    add_executable(PhonemeOnnxAsyncRunnerTests
+        tests/PhonemeOnnxAsyncRunnerTests.cpp)
+
+    target_link_libraries(PhonemeOnnxAsyncRunnerTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    target_compile_definitions(PhonemeOnnxAsyncRunnerTests
+        PRIVATE
+            "VOICE2VOCALSYNTH_TEST_ONNX_MODEL=\"${_phoneme_fixture_slash}\"")
+
+    add_test(NAME PhonemeOnnxAsyncRunnerTests COMMAND PhonemeOnnxAsyncRunnerTests)
+
+    if(VOICE2VOCALSYNTH_ONNX_AVAILABLE)
+        voice2vocalsynth_copy_onnx_runtime_runtime_deps(PhonemeOnnxAsyncRunnerTests)
+    endif()
 endif()

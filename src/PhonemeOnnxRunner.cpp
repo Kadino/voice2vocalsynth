@@ -71,8 +71,13 @@ bool PhonemeOnnxRunner::load(const std::filesystem::path& model_path, std::strin
         impl_->session_options.SetIntraOpNumThreads(1);
         impl_->session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
 
+#ifdef _WIN32
+        const auto& native_path = model_path.native();
+        impl_->session = std::make_unique<Ort::Session>(impl_->env, native_path.c_str(), impl_->session_options);
+#else
         const auto path_string = model_path.string();
         impl_->session = std::make_unique<Ort::Session>(impl_->env, path_string.c_str(), impl_->session_options);
+#endif
     } catch (const Ort::Exception& exception) {
         error = exception.what();
         impl_.reset();
