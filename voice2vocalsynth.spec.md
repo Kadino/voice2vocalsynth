@@ -101,6 +101,43 @@ latencyDesign:
       - pitchSmoothingDelay
       - renderQueueDelay
       - outputDeviceLatency
+vadSynchronization:
+  purpose: >-
+    Voice activity detection (VAD) marks speech vs non-speech for gating, utterance
+    boundaries, and coordination with streaming phoneme ONNX inference and the renderer.
+    VAD edges must align with what the listener perceives at the output, not only with
+    instantaneous features on the incoming waveform.
+  analysisVersusPlaybackTimelines:
+    summary: Treat capture/analysis time and DAC playback time as separable but linked clocks.
+    analysisTimeline: >-
+      VAD and phoneme frames are computed on the ring-buffer / capture clock, including
+      analysis-window lookahead and temporal-stabilizer delay before labels are considered
+      committed.
+    playbackTimeline: >-
+      Synthesized audio is heard only after end-to-end latency: device and JUCE buffer
+      delay, analysis lookahead, stabilization, optional pitch smoothing, ONNX inference
+      scheduling and queueing, render planning, and output path delay (see latencyDesign
+      breakdown fields).
+  boundaryRepresentation:
+    summary: Emit timestamped speech boundaries instead of only unprompted edge events.
+    recommendations:
+      - Attach monotonic timestamps (seconds since stream start or a global sample index) to speech_onset and speech_end hypotheses.
+      - Map analysis-time boundaries to renderer actions using measured or estimated end-to-end latency so phrase release matches perceived speech offset.
+  latencyAlignment:
+    baseline: Apply a fixed mapping from analysis time to render time using the exposed latency budget components where delays are stable.
+    inferenceJitter: >-
+      ONNX inference and async scheduling can add variable delay; maintain a bounded moving
+      estimate of model-plus-queue lag and clamp updates so utterance boundaries do not
+      audibly hunt.
+  rendererInteraction:
+    sustainAndRelease: >-
+      For held material (including looped sustain regions in the voicebank renderer), use
+      render-time-aligned utterance end to exit sustain and play the trailing tail once,
+      rather than cutting at the raw VAD edge in analysis time.
+  vadArchitectureNote: >-
+    VAD may share front-end features with the phoneme model for simpler alignment, or run as
+    a lighter parallel detector; the latter may disagree with phoneme segmentation and
+    requires explicit fusion rules.
 phonemeDetection:
   designPreference: onnx_based_streaming_phoneme_model
   phonemeSet: arpabet
@@ -381,6 +418,14 @@ dataStorage:
         - aliases.csv
   trainingRecording:
     optInAutoCaptureSupported: true
+  repositoryTestFixtures:
+    summary: Small permissive-licensed WAV, ONNX, or similar files may live in-repo for tests.
+    provenanceRequired: true
+    provenanceMinimumFields:
+      - origin_or_author
+      - license_identifier
+      - source_url_or_checksum_reference
+      - modifications_from_upstream_if_any
 ---
 
 Voice2VocalSynth canonical project specification.
