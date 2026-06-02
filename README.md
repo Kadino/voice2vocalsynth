@@ -70,6 +70,9 @@ The repository currently contains the first phoneme mapping slice:
 - Editable JSON preset import/export for the settings model. The UI can use the
   same model while users can still edit preset files by hand.
 - **`PhonemeTemporalStabilizer`** (`PhonemeTemporalObservation` → committed **`PhonemeFrame`** segments) with unit tests; JUCE live log includes **`ph_frame`** lines driven by a **pitch-gated placeholder** (testing) **in parallel** with optional **ONNX stub** jobs—this hybrid stays for exercising stabilizer boundaries and async inference without a real phoneme head yet.
+- **`VoiceActivityDetector`** emits timestamped **`speech_onset`** / **`speech_end`** on the stream clock; the JUCE live log records them as **`vad`** JSON.
+- **`InferenceLatencyTracker`** maintains a clamped moving estimate of ONNX queue+inference lag; shell **`onnx`** lines include `lag_ms` and `lag_est_ms`.
+- **`PlaybackBoundaryMapper`** and **`UtteranceSustainReleasePolicy`** map analysis boundaries to playback-time sustain release (`sustain_release` JSON). Offline render honors `RenderEvent::perceivedUtteranceEndSeconds` to truncate sustain loops.
 
 ## Build
 

@@ -133,7 +133,13 @@ OfflineRenderResult OfflineRenderer::render(const RenderPlan& plan, const Offlin
                 : sourceHz;
         const double pitchRatio = pitchShiftRatio(targetHz, sourceHz);
 
-        const std::size_t outEventSamples = durationSamples(event.durationMs, result.sampleRate);
+        std::size_t outEventSamples = durationSamples(event.durationMs, result.sampleRate);
+        if (event.perceivedUtteranceEndSeconds > event.startTimeSeconds + 1.0e-9) {
+            const double relSeconds = event.perceivedUtteranceEndSeconds - event.startTimeSeconds;
+            const auto cap = static_cast<std::size_t>(
+                std::max(1.0, std::ceil(relSeconds * static_cast<double>(result.sampleRate))));
+            outEventSamples = std::min(outEventSamples, cap);
+        }
 
         std::size_t outOffset = static_cast<std::size_t>(
             std::max(0.0, std::floor(event.startTimeSeconds * static_cast<double>(result.sampleRate))));

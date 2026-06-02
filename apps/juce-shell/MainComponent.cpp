@@ -8,6 +8,11 @@
 #include "Voice2VocalSynth/VoicebankMappingPlanner.h"
 #include "Voice2VocalSynth/VoicebankScanner.h"
 
+#include "Voice2VocalSynth/InferenceLatencyTracker.h"
+#include "Voice2VocalSynth/PlaybackBoundaryMapper.h"
+#include "Voice2VocalSynth/UtteranceSustainReleasePolicy.h"
+#include "Voice2VocalSynth/VoiceActivityDetector.h"
+
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -333,6 +338,9 @@ void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* device)
     phonemeThrottleCounter_ = 0;
     pitchTracker_.clear();
     phonemeStabilizer_.reset();
+    voiceVad_.reset();
+    inferenceLatency_.reset();
+    sustainRelease_.reset();
     if (device != nullptr) {
         liveSampleRateHz_ = device->getCurrentSampleRate();
     }
@@ -484,6 +492,16 @@ void MainComponent::livePipelineTimerTick()
     const auto est = Voice2VocalSynth::estimatePitchFromMono(ptr, win, liveSampleRateHz_);
     const double streamSec = static_cast<double>(samples) / liveSampleRateHz_;
 
+    const float rms = Voice2VocalSynth::VoiceActivityDetector::rms_from_mono(ptr, win);
+    voiceVad_.observe_rms(rms, streamSec);
+
+    Voice2VocalSynth::AudioDeviceLatency deviceLat =
+        deviceLatencyFromJuce(deviceManager.getCurrentAudioDevice());
+    const auto latencyBreakdown =
+        Voice2VocalSynth::LatencyBudgetCalculator::calculate(deviceLat, analysisSettings_);
+    const double inferenceJitterMs = inferenceLatency_.has_estimate() ? inferenceLatency_.estimate_ms() : 0.0;
+
+
     Voice2VocalSynth::PitchInput pin;
     pin.frequencyHz = est.frequencyHz;
     pin.confidence = est.confidence;
@@ -496,6 +514,32 @@ void MainComponent::livePipelineTimerTick()
     line.precision(5);
     line << "{\"kind\":\"pitch\",\"t\":" << streamSec << ",\"f0_hz\":" << est.frequencyHz
          << ",\"conf\":" << est.confidence << ",\"target_midi\":" << target.targetMidi << "}";
+
+    Voice2VocalSynth::SpeechBoundaryEvent vadEv;
+    while (voiceVad_.try_pop_boundary(vadEv)) {
+        const double playbackT = Voice2VocalSynth::PlaybackBoundaryMapper::analysisToPlaybackSeconds(
+            vadEv.stream_time_seconds, latencyBreakdown, inferenceJitterMs);
+        sustainRelease_.on_speech_boundary(vadEv, latencyBreakdown, inferenceJitterMs);
+        std::ostringstream vl;
+        vl.setf(std::ios::fixed);
+        vl.precision(5);
+        vl << "{"kind":"vad","event":"" << Voice2VocalSynth::speechBoundaryKindName(vadEv.kind)
+           << "","t":" << vadEv.stream_time_seconds << ","rms":" << vadEv.rms
+           << ","t_playback":" << playbackT << "}";
+        pushLiveLogLine(vl.str());
+    }
+
+    const double playbackNow = Voice2VocalSynth::PlaybackBoundaryMapper::analysisToPlaybackSeconds(
+        streamSec, latencyBreakdown, inferenceJitterMs);
+    Voice2VocalSynth::SustainReleaseCommand releaseCmd;
+    while (sustainRelease_.try_pop_release(playbackNow, releaseCmd)) {
+        std::ostringstream rl;
+        rl.setf(std::ios::fixed);
+        rl.precision(5);
+        rl << "{"kind":"sustain_release","t_playback":" << releaseCmd.playback_time_seconds
+           << ","t_analysis_end":" << releaseCmd.analysis_end_seconds << "}";
+        pushLiveLogLine(rl.str());
+    }
 
     // Hybrid testing path (intentional): pitch-gated placeholder hypotheses feed the temporal
     // stabilizer so `ph_frame` commits can be exercised without a real phoneme ONNX head. The
@@ -530,11 +574,16 @@ void MainComponent::livePipelineTimerTick()
         std::ostringstream pl;
         pl.setf(std::ios::fixed);
         pl.precision(5);
+        const auto lagNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            phonOut.inference_completed_steady_time - phonOut.enqueued_steady_time).count();
+        const double lagMs = static_cast<double>(lagNs) / 1.0e6;
+        inferenceLatency_.observe_ms(lagMs);
         pl << "{\"kind\":\"onnx\",\"job\":" << phonOut.job_id << ",\"t_stream\":" << phonOut.stream_time_start_seconds
            << ",\"steady_ns\":" << std::chrono::duration_cast<std::chrono::nanoseconds>(
                                      phonOut.inference_completed_steady_time.time_since_epoch())
                                      .count()
            << ",\"ok\":" << (phonOut.run.ok ? "true" : "false") << ",\"out_elems\":" << phonOut.run.output.size()
+           << ",\"lag_ms\":" << lagMs << ",\"lag_est_ms\":" << inferenceLatency_.estimate_ms()
            << "}";
         pushLiveLogLine(pl.str());
     }

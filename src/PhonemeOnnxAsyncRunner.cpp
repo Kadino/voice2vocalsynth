@@ -68,6 +68,7 @@ std::uint64_t PhonemeOnnxAsyncRunner::enqueue(PhonemeOnnxAsyncJobInput job)
     queued.job_id = next_job_id_.fetch_add(1, std::memory_order_relaxed);
     queued.features = std::move(job.features);
     queued.stream_time_start_seconds = job.stream_time_start_seconds;
+    queued.enqueued_steady_time = std::chrono::steady_clock::now();
     const auto id = queued.job_id;
     pending_.push_back(std::move(queued));
     lock.unlock();
@@ -106,6 +107,7 @@ void PhonemeOnnxAsyncRunner::worker_loop()
         PhonemeOnnxAsyncJobOutput out;
         out.job_id = job.job_id;
         out.stream_time_start_seconds = job.stream_time_start_seconds;
+        out.enqueued_steady_time = job.enqueued_steady_time;
         out.run = runner_->run(job.features);
         out.inference_completed_steady_time = std::chrono::steady_clock::now();
 

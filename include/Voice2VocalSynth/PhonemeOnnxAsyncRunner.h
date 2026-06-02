@@ -27,6 +27,7 @@ struct PhonemeOnnxAsyncJobOutput
 {
     std::uint64_t job_id = 0;
     double stream_time_start_seconds = 0.0;
+    std::chrono::steady_clock::time_point enqueued_steady_time {};
     std::chrono::steady_clock::time_point inference_completed_steady_time {};
     PhonemeOnnxRunner::RunResult run;
 };
@@ -73,6 +74,7 @@ private:
         std::uint64_t job_id = 0;
         std::vector<float> features;
         double stream_time_start_seconds = 0.0;
+        std::chrono::steady_clock::time_point enqueued_steady_time {};
     };
 
     void worker_loop();

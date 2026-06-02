@@ -21,12 +21,16 @@ add_library(Voice2VocalSynthCore
     src/AppSettings.cpp
     src/DebugTimeline.cpp
     src/LatencyBudget.cpp
+    src/PlaybackBoundaryMapper.cpp
+    src/InferenceLatencyTracker.cpp
     src/OfflineRenderer.cpp
     src/PcmWavReader.cpp
     src/PcmWavWriter.cpp
     src/PhonemeOnnxAsyncRunner.cpp
     src/PhonemeOnnxRunner.cpp
     src/PhonemeTemporalStabilizer.cpp
+    src/UtteranceSustainReleasePolicy.cpp
+    src/VoiceActivityDetector.cpp
     src/PhonemeFallbackMapper.cpp
     src/PitchHistory.cpp
     src/PitchTarget.cpp
@@ -173,6 +177,43 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
             Voice2VocalSynthCore)
 
     add_test(NAME LatencyBudgetTests COMMAND LatencyBudgetTests)
+
+    add_executable(VoiceActivityDetectorTests
+        tests/VoiceActivityDetectorTests.cpp)
+
+    target_link_libraries(VoiceActivityDetectorTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    add_test(NAME VoiceActivityDetectorTests COMMAND VoiceActivityDetectorTests)
+
+    add_executable(InferenceLatencyTrackerTests
+        tests/InferenceLatencyTrackerTests.cpp)
+
+    target_link_libraries(InferenceLatencyTrackerTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    add_test(NAME InferenceLatencyTrackerTests COMMAND InferenceLatencyTrackerTests)
+
+    add_executable(PlaybackBoundaryMapperTests
+        tests/PlaybackBoundaryMapperTests.cpp)
+
+    target_link_libraries(PlaybackBoundaryMapperTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    add_test(NAME PlaybackBoundaryMapperTests COMMAND PlaybackBoundaryMapperTests)
+
+    add_executable(UtteranceSustainReleasePolicyTests
+        tests/UtteranceSustainReleasePolicyTests.cpp)
+
+    target_link_libraries(UtteranceSustainReleasePolicyTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    add_test(NAME UtteranceSustainReleasePolicyTests COMMAND UtteranceSustainReleasePolicyTests)
+
 
     add_executable(AppSettingsTests
         tests/AppSettingsTests.cpp)
