@@ -44,6 +44,8 @@ struct RenderEvent
     double sourceRecordingFrequencyHz = 0.0;
     bool usedPrefixMapCandidate = false;
     bool usedPartialFallback = false;
+    /// Playback timeline seconds when sustain should end (0 = use full event duration).
+    double perceivedUtteranceEndSeconds = 0.0;
 };
 
 struct SkippedRenderEvent

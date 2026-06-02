@@ -6,6 +6,7 @@ This document captures the **gap analysis and prioritized plan** agreed for Voic
 
 - [x] **Milestone 1:** minimal live capture → analysis hooks → logging (JUCE shell).
 - [x] **Milestone 2 (v1):** temporal stabilizer in core + `PhonemeFrame` commits + shell JSON log; dedicated CSV writer deferred.
+- [x] **Milestone 3 (v1):** VAD boundaries + inference lag tracker + playback-aligned sustain release policy.
 - [ ] …
 
 ## Milestone 1 — Minimal live closed loop (highest leverage)
@@ -25,9 +26,9 @@ This document captures the **gap analysis and prioritized plan** agreed for Voic
 
 ## Milestone 3 — VAD + boundary timestamps
 
-- [ ] `speech_onset` / `speech_end` with stream timestamps (`vadSynchronization.boundaryRepresentation`).
-- [ ] Bounded moving estimate of inference+queue lag (`vadSynchronization.latencyAlignment.inferenceJitter`).
-- [ ] Renderer policy: sustain release aligned to **perceived** utterance end (`vadSynchronization.rendererInteraction`).
+- [x] `speech_onset` / `speech_end` with stream timestamps (`vadSynchronization.boundaryRepresentation`).
+- [x] Bounded moving estimate of inference+queue lag (`vadSynchronization.latencyAlignment.inferenceJitter`).
+- [x] Renderer policy: sustain release aligned to **perceived** utterance end (`vadSynchronization.rendererInteraction`).
 
 ## Milestone 4 — Config-driven ARPABET mapping
 
@@ -50,7 +51,7 @@ This document captures the **gap analysis and prioritized plan** agreed for Voic
 | Area | Spec | Repo (pre–live-MVP) |
 |------|------|---------------------|
 | Full `signalPipeline` live | Yes | Mostly offline / libraries |
-| VAD + render-aligned release | Yes | Spec text only |
+| VAD + render-aligned release | Yes | `VoiceActivityDetector` + `UtteranceSustainReleasePolicy` + offline `perceivedUtteranceEndSeconds` |
 | `PhonemeFrame` streaming | Yes | Stabilizer + shell `ph_frame` JSON (phoneme ONNX head TBD) |
 | Whistle detector | Separate detector | Alias setting only |
 | Mapping in config file | Required | Code defaults |
