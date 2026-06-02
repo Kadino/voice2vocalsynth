@@ -69,10 +69,7 @@ The repository currently contains the first phoneme mapping slice:
   latency mode, and recording/debug options.
 - Editable JSON preset import/export for the settings model. The UI can use the
   same model while users can still edit preset files by hand.
-- **Live pipeline MVP (JUCE shell):** mono capture buffer from the audio I/O callback,
-  block **pitch** estimates (`SimplePitchEstimator` → `RecentPitchTracker` →
-  `PitchTargetCalculator`), optional throttled **ONNX identity** jobs via
-  `PhonemeOnnxAsyncRunner`, and a scrolling **JSON line log** for inspection.
+- **`PhonemeTemporalStabilizer`** (`PhonemeTemporalObservation` → committed **`PhonemeFrame`** segments) with unit tests; JUCE live log includes **`ph_frame`** lines driven by a **pitch-gated placeholder** (testing) **in parallel** with optional **ONNX stub** jobs—this hybrid stays for exercising stabilizer boundaries and async inference without a real phoneme head yet.
 
 ## Build
 

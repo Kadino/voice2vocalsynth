@@ -4,8 +4,8 @@ This document captures the **gap analysis and prioritized plan** agreed for Voic
 
 ## Implementation status legend
 
-- [x] **Milestone 1 (started / partial):** minimal live capture → analysis hooks → logging (see shell).
-- [ ] Milestone 2
+- [x] **Milestone 1:** minimal live capture → analysis hooks → logging (JUCE shell).
+- [x] **Milestone 2 (v1):** temporal stabilizer in core + `PhonemeFrame` commits + shell JSON log; dedicated CSV writer deferred.
 - [ ] …
 
 ## Milestone 1 — Minimal live closed loop (highest leverage)
@@ -19,8 +19,9 @@ This document captures the **gap analysis and prioritized plan** agreed for Voic
 
 ## Milestone 2 — Temporal phoneme stabilizer
 
-- [ ] State machine on top of model outputs: min dwell, hysteresis, committed boundaries (`phonemeDetection.temporalStabilizer` in spec).
-- [ ] Emit **`PhonemeFrame`**-shaped records, not raw logits, toward CSV/JSON export.
+- [x] State machine on top of streaming hypotheses: **min segment duration**, **candidate-stable switch** with **confidence hysteresis**, **silence dwell** before closing a segment (`phonemeDetection.temporalStabilizer` v1).
+- [x] Emit **`PhonemeFrame`**-shaped committed segments (`try_pop_committed`); JUCE shell logs them as **`ph_frame`** JSON. **Hybrid for testing (keep):** stabilizer input stays a **pitch-gated placeholder** (voiced pitch → `AH`) in parallel with the **ONNX stub** jobs (`onnx` JSON lines), so boundaries and async plumbing can be debugged before a real phoneme classifier exists.
+- [ ] Optional: write the same records to session **CSV** alongside future `phonemes.csv` (`dataStorage.recordingDebugFormat`).
 
 ## Milestone 3 — VAD + boundary timestamps
 
@@ -50,9 +51,9 @@ This document captures the **gap analysis and prioritized plan** agreed for Voic
 |------|------|---------------------|
 | Full `signalPipeline` live | Yes | Mostly offline / libraries |
 | VAD + render-aligned release | Yes | Spec text only |
-| `PhonemeFrame` streaming | Yes | Struct + ONNX infra |
+| `PhonemeFrame` streaming | Yes | Stabilizer + shell `ph_frame` JSON (phoneme ONNX head TBD) |
 | Whistle detector | Separate detector | Alias setting only |
 | Mapping in config file | Required | Code defaults |
 | WORLD-quality renderer | Planned | Naive resample offline |
 
-Update the **Milestone 1** checkboxes as the shell and core evolve.
+Update the milestone checkboxes as the shell and core evolve.

@@ -26,6 +26,7 @@ add_library(Voice2VocalSynthCore
     src/PcmWavWriter.cpp
     src/PhonemeOnnxAsyncRunner.cpp
     src/PhonemeOnnxRunner.cpp
+    src/PhonemeTemporalStabilizer.cpp
     src/PhonemeFallbackMapper.cpp
     src/PitchHistory.cpp
     src/PitchTarget.cpp
@@ -100,6 +101,15 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
             Voice2VocalSynthCore)
 
     add_test(NAME SimplePitchEstimatorTests COMMAND SimplePitchEstimatorTests)
+
+    add_executable(PhonemeTemporalStabilizerTests
+        tests/PhonemeTemporalStabilizerTests.cpp)
+
+    target_link_libraries(PhonemeTemporalStabilizerTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    add_test(NAME PhonemeTemporalStabilizerTests COMMAND PhonemeTemporalStabilizerTests)
 
     add_executable(PitchHistoryTests
         tests/PitchHistoryTests.cpp)
