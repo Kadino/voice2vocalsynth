@@ -1,0 +1,65 @@
+{
+  "phonemeSet": "arpabet",
+  "enablePartialCvcFallback": true,
+  "defaultFinalConsonantVowel": "u",
+  "partialFinalVowelTailGain": 0.15,
+  "partialFinalMaxDurationMs": 90,
+  "vowelFallbacks": {
+    "AA": "a",
+    "AE": "a",
+    "AH": "a",
+    "AO": "o",
+    "AW": "a",
+    "AY": "a",
+    "EH": "e",
+    "ER": "a",
+    "EY": "e",
+    "IH": "i",
+    "IY": "i",
+    "OW": "o",
+    "OY": "o",
+    "UH": "u",
+    "UW": "u"
+  },
+  "consonantFallbacks": {
+    "B": "b",
+    "CH": "ch",
+    "D": "d",
+    "DH": "z",
+    "F": "f",
+    "G": "g",
+    "HH": "h",
+    "JH": "j",
+    "K": "k",
+    "L": "r",
+    "M": "m",
+    "N": "n",
+    "NG": "n",
+    "P": "p",
+    "R": "r",
+    "S": "s",
+    "SH": "sh",
+    "T": "t",
+    "TH": "s",
+    "V": "b",
+    "W": "w",
+    "Y": "y",
+    "Z": "z",
+    "ZH": "j"
+  },
+  "consonantAlternativeFallbacks": {
+    "DH": ["d"],
+    "F": ["h"],
+    "TH": ["t"],
+    "V": ["f", "b"],
+    "ZH": ["j"]
+  },
+  "finalConsonantAliasOverrides": {
+    "N": "n",
+    "NG": "n"
+  },
+  "finalConsonantVowelOverrides": {
+    "D": "o",
+    "T": "o"
+  }
+}

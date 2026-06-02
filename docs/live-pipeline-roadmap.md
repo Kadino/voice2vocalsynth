@@ -7,6 +7,8 @@ This document captures the **gap analysis and prioritized plan** agreed for Voic
 - [x] **Milestone 1:** minimal live capture → analysis hooks → logging (JUCE shell).
 - [x] **Milestone 2 (v1):** temporal stabilizer in core + `PhonemeFrame` commits + shell JSON log; dedicated CSV writer deferred.
 - [x] **Milestone 3 (v1):** VAD boundaries + inference lag tracker + playback-aligned sustain release policy.
+- [x] **Milestone 4 (v1):** config-driven ARPABET → Japanese mapping JSON.
+- [ ] VAD boundaries + inference lag tracker + playback-aligned sustain release policy.
 - [ ] …
 
 ## Milestone 1 — Minimal live closed loop (highest leverage)
@@ -32,7 +34,7 @@ This document captures the **gap analysis and prioritized plan** agreed for Voic
 
 ## Milestone 4 — Config-driven ARPABET mapping
 
-- [ ] Load `phonemeToJapaneseMapping` from user file (`phonemeToJapaneseMapping.mustLiveInConfigFile`); keep code defaults only as fallback.
+- [x] Load `phonemeToJapaneseMapping` from user file (`phonemeToJapaneseMapping.mustLiveInConfigFile`); keep code defaults only as fallback.
 
 ## Milestone 5 — Whistle detector v0
 
@@ -54,7 +56,7 @@ This document captures the **gap analysis and prioritized plan** agreed for Voic
 | VAD + render-aligned release | Yes | `VoiceActivityDetector` + `UtteranceSustainReleasePolicy` + offline `perceivedUtteranceEndSeconds` |
 | `PhonemeFrame` streaming | Yes | Stabilizer + shell `ph_frame` JSON (phoneme ONNX head TBD) |
 | Whistle detector | Separate detector | Alias setting only |
-| Mapping in config file | Required | Code defaults |
+| Mapping in config file | Required | `config/phoneme_to_japanese.json` + loader |
 | WORLD-quality renderer | Planned | Naive resample offline |
 
 Update the milestone checkboxes as the shell and core evolve.

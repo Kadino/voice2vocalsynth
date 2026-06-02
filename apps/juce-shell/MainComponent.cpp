@@ -5,6 +5,7 @@
 #include "Voice2VocalSynth/PitchTarget.h"
 #include "Voice2VocalSynth/RenderPlanner.h"
 #include "Voice2VocalSynth/SimplePitchEstimator.h"
+#include "Voice2VocalSynth/PhonemeMappingConfigLoader.h"
 #include "Voice2VocalSynth/VoicebankMappingPlanner.h"
 #include "Voice2VocalSynth/VoicebankScanner.h"
 
@@ -668,7 +669,28 @@ void MainComponent::runOfflineRenderToFile(const juce::File& voicebankDirectory,
         return;
     }
 
-    Voice2VocalSynth::VoicebankMappingPlanner planner;
+    std::optional<std::filesystem::path> mappingPath;
+    {
+        const auto shell = shellSettingsFile();
+        if (shell.existsAsFile()) {
+            const juce::var parsed = juce::JSON::parse(shell.loadFileAsString());
+            if (parsed.hasProperty("phonemeMappingPath")) {
+                const juce::String p = parsed.getProperty("phonemeMappingPath", {}).toString();
+                if (p.isNotEmpty()) {
+                    mappingPath = std::filesystem::path(p.toStdString());
+                }
+            }
+        }
+        if (!mappingPath) {
+            const juce::File userMap = appDataRootDirectory().getChildFile("phoneme_to_japanese.json");
+            if (userMap.existsAsFile()) {
+                mappingPath = std::filesystem::path(userMap.getFullPathName().toStdString());
+            }
+        }
+    }
+    const auto mappingLoad = Voice2VocalSynth::PhonemeMappingConfigLoader::loadEffective(mappingPath);
+    Voice2VocalSynth::VoicebankMappingPlanner planner(
+        Voice2VocalSynth::PhonemeFallbackMapper(mappingLoad.options));
     Voice2VocalSynth::VoicebankMappingRequest mapReq;
     mapReq.arpabetPhonemes = parseArpabetTokens(offlinePhonemesEditor_.getText());
     juce::String note = offlineNoteEditor_.getText().trim();
