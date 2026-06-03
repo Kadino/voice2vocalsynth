@@ -41,6 +41,7 @@ add_library(Voice2VocalSynthCore
     src/SimplePitchEstimator.cpp
     src/UtteranceSustainReleasePolicy.cpp
     src/VoiceActivityDetector.cpp
+    src/WhistleDetector.cpp
     src/VoicebankAliasIndex.cpp
     src/VoicebankMappingPlanner.cpp
     src/VoicebankScanner.cpp)
@@ -232,6 +233,15 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
             Voice2VocalSynthCore)
 
     add_test(NAME UtteranceSustainReleasePolicyTests COMMAND UtteranceSustainReleasePolicyTests)
+
+    add_executable(WhistleDetectorTests
+        tests/WhistleDetectorTests.cpp)
+
+    target_link_libraries(WhistleDetectorTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    add_test(NAME WhistleDetectorTests COMMAND WhistleDetectorTests)
 
     add_executable(AppSettingsTests
         tests/AppSettingsTests.cpp)

@@ -4,7 +4,12 @@
 
 #include "Voice2VocalSynth/LatencyBudget.h"
 #include "Voice2VocalSynth/InferenceLatencyTracker.h"
+#include "Voice2VocalSynth/InferenceLatencyTracker.h"
 #include "Voice2VocalSynth/PhonemeTemporalStabilizer.h"
+#include "Voice2VocalSynth/PlaybackBoundaryMapper.h"
+#include "Voice2VocalSynth/UtteranceSustainReleasePolicy.h"
+#include "Voice2VocalSynth/VoiceActivityDetector.h"
+#include "Voice2VocalSynth/WhistleDetector.h"
 #include "Voice2VocalSynth/PlaybackBoundaryMapper.h"
 #include "Voice2VocalSynth/UtteranceSustainReleasePolicy.h"
 #include "Voice2VocalSynth/VoiceActivityDetector.h"
@@ -92,6 +97,11 @@ private:
     Voice2VocalSynth::RecentPitchTracker pitchTracker_;
     Voice2VocalSynth::PitchTargetCalculator pitchCalculator_;
     Voice2VocalSynth::PhonemeTemporalStabilizer phonemeStabilizer_;
+    Voice2VocalSynth::VoiceActivityDetector voiceVad_;
+    Voice2VocalSynth::WhistleDetector whistleDetector_;
+    Voice2VocalSynth::InferenceLatencyTracker inferenceLatency_;
+    Voice2VocalSynth::UtteranceSustainReleasePolicy sustainRelease_;
+    bool whistleModeActive_ = false;
     Voice2VocalSynth::VoiceActivityDetector voiceVad_;
     Voice2VocalSynth::InferenceLatencyTracker inferenceLatency_;
     Voice2VocalSynth::UtteranceSustainReleasePolicy sustainRelease_;

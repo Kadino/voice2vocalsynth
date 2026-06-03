@@ -7,7 +7,12 @@
 #include "Voice2VocalSynth/SimplePitchEstimator.h"
 #include "Voice2VocalSynth/PhonemeMappingConfigLoader.h"
 #include "Voice2VocalSynth/VoicebankMappingPlanner.h"
+#include "Voice2VocalSynth/InferenceLatencyTracker.h"
+#include "Voice2VocalSynth/PlaybackBoundaryMapper.h"
+#include "Voice2VocalSynth/UtteranceSustainReleasePolicy.h"
+#include "Voice2VocalSynth/VoiceActivityDetector.h"
 #include "Voice2VocalSynth/VoicebankScanner.h"
+#include "Voice2VocalSynth/WhistleDetector.h"
 
 #include "Voice2VocalSynth/InferenceLatencyTracker.h"
 #include "Voice2VocalSynth/PlaybackBoundaryMapper.h"
@@ -340,6 +345,11 @@ void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* device)
     pitchTracker_.clear();
     phonemeStabilizer_.reset();
     voiceVad_.reset();
+    whistleDetector_.reset();
+    inferenceLatency_.reset();
+    sustainRelease_.reset();
+    whistleModeActive_ = false;
+    voiceVad_.reset();
     inferenceLatency_.reset();
     sustainRelease_.reset();
     if (device != nullptr) {
@@ -545,7 +555,8 @@ void MainComponent::livePipelineTimerTick()
     // Hybrid testing path (intentional): pitch-gated placeholder hypotheses feed the temporal
     // stabilizer so `ph_frame` commits can be exercised without a real phoneme ONNX head. The
     // ONNX identity stub below remains a separate async pipeline for inference/timing checks.
-    {
+    // Whistle mode bypasses phoneme hypotheses (`whistleDetection.separatePitchPath`).
+    if (!whistleModeActive_) {
         Voice2VocalSynth::PhonemeTemporalObservation ob;
         ob.stream_time_seconds = streamSec;
         if (est.confidence > 0.45F) {
@@ -556,6 +567,7 @@ void MainComponent::livePipelineTimerTick()
             ob.confidence = 0.0F;
         }
         phonemeStabilizer_.observe(ob);
+    }
     }
     Voice2VocalSynth::PhonemeFrame phFrame;
     while (phonemeStabilizer_.try_pop_committed(phFrame)) {
