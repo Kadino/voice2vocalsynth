@@ -34,6 +34,7 @@ add_library(Voice2VocalSynthCore
     src/PhonemeOnnxRunner.cpp
     src/PhonemeTemporalStabilizer.cpp
     src/PhonemeFallbackMapper.cpp
+    src/PhonemeMappingConfigLoader.cpp
     src/PitchHistory.cpp
     src/PitchTarget.cpp
     src/RenderPlanner.cpp
@@ -93,6 +94,19 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
             Voice2VocalSynthCore)
 
     add_test(NAME PhonemeFallbackMapperTests COMMAND PhonemeFallbackMapperTests)
+
+    add_executable(PhonemeMappingConfigLoaderTests
+        tests/PhonemeMappingConfigLoaderTests.cpp)
+
+    target_link_libraries(PhonemeMappingConfigLoaderTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    target_compile_definitions(PhonemeMappingConfigLoaderTests
+        PRIVATE
+            "VOICE2VOCALSYNTH_REPOSITORY_ROOT=\"${_repo_root_slash}\"")
+
+    add_test(NAME PhonemeMappingConfigLoaderTests COMMAND PhonemeMappingConfigLoaderTests)
 
     add_executable(PitchTargetTests
         tests/PitchTargetTests.cpp)
