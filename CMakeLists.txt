@@ -17,25 +17,30 @@ set(_phoneme_fixture_slash "${VOICE2VOCALSYNTH_PHONEME_REPOSITORY_FIXTURE}")
 file(TO_CMAKE_PATH "${_phoneme_fixture_slash}" _phoneme_fixture_slash)
 string(REPLACE "\\" "/" _phoneme_fixture_slash "${_phoneme_fixture_slash}")
 
+set(_repo_root_slash "${CMAKE_SOURCE_DIR}")
+file(TO_CMAKE_PATH "${_repo_root_slash}" _repo_root_slash)
+string(REPLACE "\\" "/" _repo_root_slash "${_repo_root_slash}")
+
 add_library(Voice2VocalSynthCore
     src/AppSettings.cpp
     src/DebugTimeline.cpp
-    src/LatencyBudget.cpp
-    src/PlaybackBoundaryMapper.cpp
     src/InferenceLatencyTracker.cpp
+    src/LatencyBudget.cpp
     src/OfflineRenderer.cpp
+    src/PlaybackBoundaryMapper.cpp
     src/PcmWavReader.cpp
     src/PcmWavWriter.cpp
     src/PhonemeOnnxAsyncRunner.cpp
     src/PhonemeOnnxRunner.cpp
     src/PhonemeTemporalStabilizer.cpp
-    src/UtteranceSustainReleasePolicy.cpp
-    src/VoiceActivityDetector.cpp
     src/PhonemeFallbackMapper.cpp
     src/PitchHistory.cpp
     src/PitchTarget.cpp
     src/RenderPlanner.cpp
     src/SimplePitchEstimator.cpp
+    src/UtteranceSustainReleasePolicy.cpp
+    src/VoiceActivityDetector.cpp
+    src/WhistleDetector.cpp
     src/VoicebankAliasIndex.cpp
     src/VoicebankMappingPlanner.cpp
     src/VoicebankScanner.cpp)
@@ -48,6 +53,7 @@ target_compile_features(Voice2VocalSynthCore PUBLIC cxx_std_20)
 
 target_compile_definitions(Voice2VocalSynthCore
     PRIVATE
+        "VOICE2VOCALSYNTH_REPOSITORY_ROOT=\"${_repo_root_slash}\""
         "VOICE2VOCALSYNTH_REPOSITORY_PHONEME_ONNX_FIXTURE=\"${_phoneme_fixture_slash}\"")
 
 if(VOICE2VOCALSYNTH_ONNX_AVAILABLE)
@@ -214,6 +220,14 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
 
     add_test(NAME UtteranceSustainReleasePolicyTests COMMAND UtteranceSustainReleasePolicyTests)
 
+    add_executable(WhistleDetectorTests
+        tests/WhistleDetectorTests.cpp)
+
+    target_link_libraries(WhistleDetectorTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    add_test(NAME WhistleDetectorTests COMMAND WhistleDetectorTests)
 
     add_executable(AppSettingsTests
         tests/AppSettingsTests.cpp)

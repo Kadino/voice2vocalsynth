@@ -6,8 +6,10 @@ This document captures the **gap analysis and prioritized plan** agreed for Voic
 
 - [x] **Milestone 1:** minimal live capture → analysis hooks → logging (JUCE shell).
 - [x] **Milestone 2 (v1):** temporal stabilizer in core + `PhonemeFrame` commits + shell JSON log; dedicated CSV writer deferred.
-- [x] **Milestone 3 (v1):** VAD boundaries + inference lag tracker + playback-aligned sustain release policy.
+- [x] **Milestone 3 (v1):** VAD boundaries + inference lag tracker + playback-aligned sustain release.
+- [x] **Milestone 5 (v1):** whistle detector v0 (Goertzel HNR-style, separate from phoneme ONNX).
 - [ ] …
+
 
 ## Milestone 1 — Minimal live closed loop (highest leverage)
 
@@ -36,7 +38,7 @@ This document captures the **gap analysis and prioritized plan** agreed for Voic
 
 ## Milestone 5 — Whistle detector v0
 
-- [ ] Lightweight spectral / HNR-style flag; separate path from phoneme ONNX (`whistleDetection`).
+- [x] Lightweight spectral / HNR-style flag; separate path from phoneme ONNX (`whistleDetection`).
 
 ## Milestone 6 — Measured latency
 
@@ -53,7 +55,7 @@ This document captures the **gap analysis and prioritized plan** agreed for Voic
 | Full `signalPipeline` live | Yes | Mostly offline / libraries |
 | VAD + render-aligned release | Yes | `VoiceActivityDetector` + `UtteranceSustainReleasePolicy` + offline `perceivedUtteranceEndSeconds` |
 | `PhonemeFrame` streaming | Yes | Stabilizer + shell `ph_frame` JSON (phoneme ONNX head TBD) |
-| Whistle detector | Separate detector | Alias setting only |
+| Whistle detector | Separate detector | `WhistleDetector` + live `whistle` / `whistle_edge` JSON |
 | Mapping in config file | Required | Code defaults |
 | WORLD-quality renderer | Planned | Naive resample offline |
 
