@@ -1,0 +1,9 @@
+{
+  "phonemeSet": "arpabet",
+  "consonantFallbacks": {
+    "TH": "t"
+  },
+  "consonantAlternativeFallbacks": {
+    "TH": ["s"]
+  }
+}
