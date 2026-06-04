@@ -26,6 +26,7 @@ add_library(Voice2VocalSynthCore
     src/DebugTimeline.cpp
     src/InferenceLatencyTracker.cpp
     src/LatencyBudget.cpp
+    src/LoopbackLatencyMeasurer.cpp
     src/OfflineRenderer.cpp
     src/PlaybackBoundaryMapper.cpp
     src/PcmWavReader.cpp
@@ -215,6 +216,18 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
             Voice2VocalSynthCore)
 
     add_test(NAME InferenceLatencyTrackerTests COMMAND InferenceLatencyTrackerTests)
+
+    add_executable(LoopbackLatencyMeasurerTests
+        tests/LoopbackLatencyMeasurerTests.cpp)
+
+    target_link_libraries(LoopbackLatencyMeasurerTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    add_test(NAME LoopbackLatencyMeasurerTests COMMAND LoopbackLatencyMeasurerTests)
+
+
+
 
     add_executable(PlaybackBoundaryMapperTests
         tests/PlaybackBoundaryMapperTests.cpp)

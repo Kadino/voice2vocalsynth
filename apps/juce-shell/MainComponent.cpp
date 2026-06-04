@@ -8,16 +8,13 @@
 #include "Voice2VocalSynth/PhonemeMappingConfigLoader.h"
 #include "Voice2VocalSynth/VoicebankMappingPlanner.h"
 #include "Voice2VocalSynth/InferenceLatencyTracker.h"
+#include "Voice2VocalSynth/LoopbackLatencyMeasurer.h"
+#include "Voice2VocalSynth/MeasuredLatency.h"
 #include "Voice2VocalSynth/PlaybackBoundaryMapper.h"
 #include "Voice2VocalSynth/UtteranceSustainReleasePolicy.h"
 #include "Voice2VocalSynth/VoiceActivityDetector.h"
 #include "Voice2VocalSynth/VoicebankScanner.h"
 #include "Voice2VocalSynth/WhistleDetector.h"
-
-#include "Voice2VocalSynth/InferenceLatencyTracker.h"
-#include "Voice2VocalSynth/PlaybackBoundaryMapper.h"
-#include "Voice2VocalSynth/UtteranceSustainReleasePolicy.h"
-#include "Voice2VocalSynth/VoiceActivityDetector.h"
 
 #include <atomic>
 #include <chrono>
@@ -79,8 +76,9 @@ Voice2VocalSynth::AudioDeviceLatency deviceLatencyFromJuce(juce::AudioIODevice* 
     return lat;
 }
 
-std::string breakdownText(const Voice2VocalSynth::LatencyBreakdown& bd)
+std::string breakdownText(const Voice2VocalSynth::MeasuredLatencySummary& summary)
 {
+    const auto& bd = summary.estimated;
     std::ostringstream out;
     out.setf(std::ios::fixed, std::ios::floatfield);
     out.precision(2);
@@ -89,6 +87,13 @@ std::string breakdownText(const Voice2VocalSynth::LatencyBreakdown& bd)
     }
     out << "---\n";
     out << "End-to-end (monitoring estimate): " << bd.endToEndMonitoringLatencyMs() << " ms\n";
+    if (summary.has_loopback()) {
+        out << "Measured loopback round-trip: " << summary.loopback.round_trip_ms << " ms (corr "
+            << summary.loopback.correlation << ", lag " << summary.loopback.lag_samples << " samples)\n";
+        out << "Residual (measured - estimate): " << summary.loopback_residual_ms() << " ms\n";
+        out << "Playback mapping uses measured E2E + ONNX jitter: " << summary.playback_mapping_ms()
+            << " ms\n";
+    }
     return out.str();
 }
 
@@ -154,7 +159,17 @@ MainComponent::MainComponent()
         saveShellSettings();
     };
 
-    e2eLabel_.setText("Estimated monitoring latency", juce::dontSendNotification);
+    measureLoopbackButton_.setTooltip(
+        "Route output back to input (loopback cable or virtual device), then run a short "
+        "correlation probe to measure round-trip latency and augment the budget estimate.");
+    measureLoopbackButton_.onClick = [this] { beginLoopbackMeasurement(); };
+    addAndMakeVisible(measureLoopbackButton_);
+
+    measuredLatencyLabel_.setJustificationType(juce::Justification::centredLeft);
+    measuredLatencyLabel_.setFont(juce::Font(juce::FontOptions(13.0f)));
+    addAndMakeVisible(measuredLatencyLabel_);
+
+    e2eLabel_.setText("Effective monitoring latency", juce::dontSendNotification);
     e2eLabel_.setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(e2eLabel_);
 
@@ -210,7 +225,7 @@ MainComponent::MainComponent()
     deviceManager.addChangeListener(this);
     deviceManager.addAudioCallback(this);
 
-    setSize(640, 720);
+    setSize(640, 780);
     startTimerHz(15);
     refreshLatencyDisplay();
 }
@@ -252,6 +267,10 @@ void MainComponent::resized()
     latencyPresetLabel_.setBounds(r.removeFromTop(20));
     auto presetRow = r.removeFromTop(28);
     latencyPresetCombo_.setBounds(presetRow.removeFromLeft(320));
+    r.removeFromTop(8);
+    measureLoopbackButton_.setBounds(r.removeFromTop(28));
+    r.removeFromTop(4);
+    measuredLatencyLabel_.setBounds(r.removeFromTop(36));
     r.removeFromTop(10);
 
     offlinePhraseLabel_.setBounds(r.removeFromTop(20));
@@ -331,6 +350,10 @@ void MainComponent::audioDeviceIOCallbackWithContext(const float* const* inputCh
         }
     }
     liveSamplesSeen_.fetch_add(static_cast<std::uint64_t>(numSamples), std::memory_order_relaxed);
+
+    if (loopbackMeasurer_.is_measuring() && outputChannelData[0] != nullptr && liveSampleRateHz_ > 0.0) {
+        loopbackMeasurer_.process(outputChannelData[0], mono.data(), numSamples, liveSampleRateHz_);
+    }
 }
 
 void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* device)
@@ -348,10 +371,9 @@ void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* device)
     whistleDetector_.reset();
     inferenceLatency_.reset();
     sustainRelease_.reset();
+    loopbackMeasurer_.reset();
+    loopbackResultLogged_ = false;
     whistleModeActive_ = false;
-    voiceVad_.reset();
-    inferenceLatency_.reset();
-    sustainRelease_.reset();
     if (device != nullptr) {
         liveSampleRateHz_ = device->getCurrentSampleRate();
     }
@@ -511,7 +533,21 @@ void MainComponent::livePipelineTimerTick()
     const auto latencyBreakdown =
         Voice2VocalSynth::LatencyBudgetCalculator::calculate(deviceLat, analysisSettings_);
     const double inferenceJitterMs = inferenceLatency_.has_estimate() ? inferenceLatency_.estimate_ms() : 0.0;
+    const double measuredE2eMs = measuredEndToEndMsForMapping();
 
+    if (loopbackMeasurer_.has_result() && !loopbackResultLogged_) {
+        const auto m = loopbackMeasurer_.result();
+        std::ostringstream ml;
+        ml.setf(std::ios::fixed);
+        ml.precision(3);
+        ml << "{\"kind\":\"latency_measure\",\"valid\":" << (m.valid ? "true" : "false")
+           << ",\"round_trip_ms\":" << m.round_trip_ms << ",\"corr\":" << m.correlation
+           << ",\"lag_samples\":" << m.lag_samples << ",\"estimate_ms\":"
+           << latencyBreakdown.endToEndMonitoringLatencyMs() << "}";
+        pushLiveLogLine(ml.str());
+        loopbackResultLogged_ = true;
+        refreshLatencyDisplay();
+    }
 
     Voice2VocalSynth::PitchInput pin;
     pin.frequencyHz = est.frequencyHz;
@@ -529,7 +565,7 @@ void MainComponent::livePipelineTimerTick()
     Voice2VocalSynth::SpeechBoundaryEvent vadEv;
     while (voiceVad_.try_pop_boundary(vadEv)) {
         const double playbackT = Voice2VocalSynth::PlaybackBoundaryMapper::analysisToPlaybackSeconds(
-            vadEv.stream_time_seconds, latencyBreakdown, inferenceJitterMs);
+            vadEv.stream_time_seconds, latencyBreakdown, inferenceJitterMs, measuredE2eMs);
         sustainRelease_.on_speech_boundary(vadEv, latencyBreakdown, inferenceJitterMs);
         std::ostringstream vl;
         vl.setf(std::ios::fixed);
@@ -541,7 +577,7 @@ void MainComponent::livePipelineTimerTick()
     }
 
     const double playbackNow = Voice2VocalSynth::PlaybackBoundaryMapper::analysisToPlaybackSeconds(
-        streamSec, latencyBreakdown, inferenceJitterMs);
+        streamSec, latencyBreakdown, inferenceJitterMs, measuredE2eMs);
     Voice2VocalSynth::SustainReleaseCommand releaseCmd;
     while (sustainRelease_.try_pop_release(playbackNow, releaseCmd)) {
         std::ostringstream rl;
@@ -567,7 +603,6 @@ void MainComponent::livePipelineTimerTick()
             ob.confidence = 0.0F;
         }
         phonemeStabilizer_.observe(ob);
-    }
     }
     Voice2VocalSynth::PhonemeFrame phFrame;
     while (phonemeStabilizer_.try_pop_committed(phFrame)) {
