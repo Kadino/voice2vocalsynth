@@ -31,6 +31,8 @@ add_library(Voice2VocalSynthCore
     src/PlaybackBoundaryMapper.cpp
     src/PcmWavReader.cpp
     src/PcmWavWriter.cpp
+    src/PhonemeBackend.cpp
+    src/PhonemeEvaluation.cpp
     src/PhonemeOnnxAsyncRunner.cpp
     src/PhonemeOnnxRunner.cpp
     src/PhonemeTemporalStabilizer.cpp
@@ -108,6 +110,24 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
             "VOICE2VOCALSYNTH_REPOSITORY_ROOT=\"${_repo_root_slash}\"")
 
     add_test(NAME PhonemeMappingConfigLoaderTests COMMAND PhonemeMappingConfigLoaderTests)
+
+    add_executable(PhonemeBackendTests
+        tests/PhonemeBackendTests.cpp)
+
+    target_link_libraries(PhonemeBackendTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    add_test(NAME PhonemeBackendTests COMMAND PhonemeBackendTests)
+
+    add_executable(PhonemeEvaluationTests
+        tests/PhonemeEvaluationTests.cpp)
+
+    target_link_libraries(PhonemeEvaluationTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    add_test(NAME PhonemeEvaluationTests COMMAND PhonemeEvaluationTests)
 
     add_executable(PitchTargetTests
         tests/PitchTargetTests.cpp)

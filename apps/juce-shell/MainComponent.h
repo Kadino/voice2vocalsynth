@@ -5,6 +5,7 @@
 #include "Voice2VocalSynth/InferenceLatencyTracker.h"
 #include "Voice2VocalSynth/LatencyBudget.h"
 #include "Voice2VocalSynth/LoopbackLatencyMeasurer.h"
+#include "Voice2VocalSynth/PhonemeBackend.h"
 #include "Voice2VocalSynth/PhonemeTemporalStabilizer.h"
 #include "Voice2VocalSynth/PitchHistory.h"
 #include "Voice2VocalSynth/PitchTarget.h"
@@ -97,6 +98,7 @@ private:
     double liveSampleRateHz_ = 48000.0;
     Voice2VocalSynth::RecentPitchTracker pitchTracker_;
     Voice2VocalSynth::PitchTargetCalculator pitchCalculator_;
+    Voice2VocalSynth::PlaceholderPitchPhonemeBackend placeholderPhonemeBackend_;
     Voice2VocalSynth::PhonemeTemporalStabilizer phonemeStabilizer_;
     Voice2VocalSynth::VoiceActivityDetector voiceVad_;
     Voice2VocalSynth::WhistleDetector whistleDetector_;

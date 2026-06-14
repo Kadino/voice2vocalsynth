@@ -570,9 +570,9 @@ void MainComponent::livePipelineTimerTick()
         std::ostringstream vl;
         vl.setf(std::ios::fixed);
         vl.precision(5);
-        vl << "{"kind":"vad","event":"" << Voice2VocalSynth::speechBoundaryKindName(vadEv.kind)
-           << "","t":" << vadEv.stream_time_seconds << ","rms":" << vadEv.rms
-           << ","t_playback":" << playbackT << "}";
+        vl << "{\"kind\":\"vad\",\"event\":\"" << Voice2VocalSynth::speechBoundaryKindName(vadEv.kind)
+           << "\",\"t\":" << vadEv.stream_time_seconds << ",\"rms\":" << vadEv.rms
+           << ",\"t_playback\":" << playbackT << "}";
         pushLiveLogLine(vl.str());
     }
 
@@ -583,8 +583,8 @@ void MainComponent::livePipelineTimerTick()
         std::ostringstream rl;
         rl.setf(std::ios::fixed);
         rl.precision(5);
-        rl << "{"kind":"sustain_release","t_playback":" << releaseCmd.playback_time_seconds
-           << ","t_analysis_end":" << releaseCmd.analysis_end_seconds << "}";
+        rl << "{\"kind\":\"sustain_release\",\"t_playback\":" << releaseCmd.playback_time_seconds
+           << ",\"t_analysis_end\":" << releaseCmd.analysis_end_seconds << "}";
         pushLiveLogLine(rl.str());
     }
 
@@ -593,16 +593,16 @@ void MainComponent::livePipelineTimerTick()
     // ONNX identity stub below remains a separate async pipeline for inference/timing checks.
     // Whistle mode bypasses phoneme hypotheses (`whistleDetection.separatePitchPath`).
     if (!whistleModeActive_) {
-        Voice2VocalSynth::PhonemeTemporalObservation ob;
-        ob.stream_time_seconds = streamSec;
-        if (est.confidence > 0.45F) {
-            ob.arpabet = "AH";
-            ob.confidence = est.confidence;
-        } else {
-            ob.arpabet.clear();
-            ob.confidence = 0.0F;
+        Voice2VocalSynth::PhonemeBackendAudioFrame backendFrame;
+        backendFrame.monoSamples.assign(ptr, ptr + win);
+        backendFrame.sampleRateHz = liveSampleRateHz_;
+        backendFrame.streamTimeStartSeconds = streamSec - (static_cast<double>(win) / liveSampleRateHz_);
+        const auto backendResult = placeholderPhonemeBackend_.process(backendFrame);
+        if (backendResult.ok) {
+            for (const auto& ob : backendResult.observations) {
+                phonemeStabilizer_.observe(ob);
+            }
         }
-        phonemeStabilizer_.observe(ob);
     }
     Voice2VocalSynth::PhonemeFrame phFrame;
     while (phonemeStabilizer_.try_pop_committed(phFrame)) {
@@ -841,9 +841,33 @@ void MainComponent::refreshLatencyDisplay()
     try {
         const auto bd = Voice2VocalSynth::LatencyBudgetCalculator::calculate(ad, analysisSettings_);
         e2eValueLabel_.setText(juce::String(bd.endToEndMonitoringLatencyMs(), 2) + " ms", juce::dontSendNotification);
-        breakdownEditor_.setText(breakdownText(bd));
+        Voice2VocalSynth::MeasuredLatencySummary summary;
+        summary.estimated = bd;
+        if (loopbackMeasurer_.has_result()) {
+            summary.loopback = loopbackMeasurer_.result();
+        }
+        summary.inference_jitter_ms = inferenceLatency_.has_estimate() ? inferenceLatency_.estimate_ms() : 0.0;
+        breakdownEditor_.setText(breakdownText(summary));
     } catch (...) {
         e2eValueLabel_.setText("(latency calculation error)", juce::dontSendNotification);
         breakdownEditor_.clear();
     }
+}
+
+void MainComponent::beginLoopbackMeasurement()
+{
+    loopbackMeasurer_.begin();
+    loopbackResultLogged_ = false;
+    measuredLatencyLabel_.setText("Loopback measurement running...", juce::dontSendNotification);
+    pushLiveLogLine("{\"kind\":\"latency_measure_start\"}");
+}
+
+double MainComponent::measuredEndToEndMsForMapping() const
+{
+    if (!loopbackMeasurer_.has_result()) {
+        return 0.0;
+    }
+
+    const auto measurement = loopbackMeasurer_.result();
+    return measurement.valid ? measurement.round_trip_ms : 0.0;
 }

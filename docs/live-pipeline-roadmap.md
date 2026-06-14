@@ -49,6 +49,11 @@ This document captures the **gap analysis and prioritized plan** agreed for Voic
 
 ## Milestone 7 — Real phoneme ONNX (parallel track)
 
+- [x] Define a swappable phoneme backend interface and placeholder backend so the
+      current pitch-gated `AH` path can be replaced without changing stabilizer
+      consumers.
+- [x] Add initial phoneme-frame evaluation metrics for comparing candidate
+      backends against labeled fixtures.
 - [ ] Train or integrate a streaming ARPABET-classifier ONNX matching stabilizer input/output contracts.
 
 ## Reference: major spec gaps (summary)
