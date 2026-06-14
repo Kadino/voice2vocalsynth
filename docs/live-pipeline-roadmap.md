@@ -8,8 +8,8 @@ This document captures the **gap analysis and prioritized plan** agreed for Voic
 - [x] **Milestone 2 (v1):** temporal stabilizer in core + `PhonemeFrame` commits + shell JSON log; dedicated CSV writer deferred.
 - [x] **Milestone 3 (v1):** VAD boundaries + inference lag tracker + playback-aligned sustain release policy.
 - [x] **Milestone 4 (v1):** config-driven ARPABET → Japanese mapping JSON.
-- [ ] VAD boundaries + inference lag tracker + playback-aligned sustain release policy.
-- [ ] …
+- [x] **Milestone 5 (v1):** whistle detector v0.
+- [x] **Milestone 6 (v1):** measured loopback latency (correlation probe + augment estimate / playback mapping).
 
 
 ## Milestone 1 — Minimal live closed loop (highest leverage)
@@ -43,7 +43,9 @@ This document captures the **gap analysis and prioritized plan** agreed for Voic
 
 ## Milestone 6 — Measured latency
 
-- [ ] Optional loopback / correlation to augment **estimated** breakdown (`latencyDesign.requirement`).
+- [x] `LoopbackLatencyMeasurer`: inject MLS-like probe on output, normalized cross-correlation on input (loopback required).
+- [x] `MeasuredLatencySummary` + JUCE shell **Measure loopback latency** UI; `latency_measure` JSON log line.
+- [x] Playback boundary mapping prefers measured end-to-end when valid (`PlaybackBoundaryMapper` optional override).
 
 ## Milestone 7 — Real phoneme ONNX (parallel track)
 
@@ -58,6 +60,7 @@ This document captures the **gap analysis and prioritized plan** agreed for Voic
 | `PhonemeFrame` streaming | Yes | Stabilizer + shell `ph_frame` JSON (phoneme ONNX head TBD) |
 | Whistle detector | Separate detector | `WhistleDetector` + live `whistle` / `whistle_edge` JSON |
 | Mapping in config file | Required | `config/phoneme_to_japanese.json` + loader |
+| Measured latency (loopback) | Required | `LoopbackLatencyMeasurer` + shell measure button |
 | WORLD-quality renderer | Planned | Naive resample offline |
 
 Update the milestone checkboxes as the shell and core evolve.

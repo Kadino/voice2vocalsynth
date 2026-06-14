@@ -11,9 +11,11 @@ class PlaybackBoundaryMapper
 public:
     [[nodiscard]] static double analysisToPlaybackSeconds(double analysis_time_seconds,
                                                           const LatencyBreakdown& breakdown,
-                                                          double inference_jitter_ms) noexcept;
+                                                          double inference_jitter_ms,
+                                                          double measured_end_to_end_ms = -1.0) noexcept;
 
-    [[nodiscard]] static double stableLatencyMs(const LatencyBreakdown& breakdown) noexcept;
+    [[nodiscard]] static double stableLatencyMs(const LatencyBreakdown& breakdown,
+                                              double measured_end_to_end_ms = -1.0) noexcept;
 };
 
 } // namespace Voice2VocalSynth

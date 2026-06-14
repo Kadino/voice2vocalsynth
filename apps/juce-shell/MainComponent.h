@@ -2,19 +2,16 @@
 
 #include <JuceHeader.h>
 
+#include "Voice2VocalSynth/InferenceLatencyTracker.h"
 #include "Voice2VocalSynth/LatencyBudget.h"
-#include "Voice2VocalSynth/InferenceLatencyTracker.h"
-#include "Voice2VocalSynth/InferenceLatencyTracker.h"
+#include "Voice2VocalSynth/LoopbackLatencyMeasurer.h"
 #include "Voice2VocalSynth/PhonemeTemporalStabilizer.h"
+#include "Voice2VocalSynth/PitchHistory.h"
+#include "Voice2VocalSynth/PitchTarget.h"
 #include "Voice2VocalSynth/PlaybackBoundaryMapper.h"
 #include "Voice2VocalSynth/UtteranceSustainReleasePolicy.h"
 #include "Voice2VocalSynth/VoiceActivityDetector.h"
 #include "Voice2VocalSynth/WhistleDetector.h"
-#include "Voice2VocalSynth/PlaybackBoundaryMapper.h"
-#include "Voice2VocalSynth/UtteranceSustainReleasePolicy.h"
-#include "Voice2VocalSynth/VoiceActivityDetector.h"
-#include "Voice2VocalSynth/PitchHistory.h"
-#include "Voice2VocalSynth/PitchTarget.h"
 
 #if defined(VOICE2VOCALSYNTH_WITH_ONNX)
 #include "Voice2VocalSynth/PhonemeOnnxAsyncRunner.h"
@@ -56,6 +53,8 @@ private:
 
     void showAudioSettings();
     void refreshLatencyDisplay();
+    void beginLoopbackMeasurement();
+    [[nodiscard]] double measuredEndToEndMsForMapping() const;
     void saveAudioDeviceSettings() const;
     void saveShellSettings();
     void loadShellSettingsFromDisk();
@@ -74,6 +73,8 @@ private:
     juce::TextButton offlineRenderButton_ {"Offline render test…"};
     juce::Label latencyPresetLabel_;
     juce::ComboBox latencyPresetCombo_;
+    juce::TextButton measureLoopbackButton_ {"Measure loopback latency…"};
+    juce::Label measuredLatencyLabel_;
     juce::Label offlinePhraseLabel_;
     juce::Label offlinePhonemesLabel_;
     juce::TextEditor offlinePhonemesEditor_;
@@ -101,12 +102,11 @@ private:
     Voice2VocalSynth::WhistleDetector whistleDetector_;
     Voice2VocalSynth::InferenceLatencyTracker inferenceLatency_;
     Voice2VocalSynth::UtteranceSustainReleasePolicy sustainRelease_;
+    Voice2VocalSynth::LoopbackLatencyMeasurer loopbackMeasurer_;
     bool whistleModeActive_ = false;
-    Voice2VocalSynth::VoiceActivityDetector voiceVad_;
-    Voice2VocalSynth::InferenceLatencyTracker inferenceLatency_;
-    Voice2VocalSynth::UtteranceSustainReleasePolicy sustainRelease_;
     int phonemeThrottleCounter_ = 0;
     std::deque<std::string> liveLogLines_;
+    bool loopbackResultLogged_ = false;
 
 #if defined(VOICE2VOCALSYNTH_WITH_ONNX)
     std::unique_ptr<Voice2VocalSynth::PhonemeOnnxAsyncRunner> phonemeAsync_;

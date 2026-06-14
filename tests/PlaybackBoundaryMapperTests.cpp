@@ -20,11 +20,24 @@ void maps_analysis_to_playback()
     assert(std::abs(playback - expected) < 1.0e-6);
 }
 
+void measured_end_to_end_overrides_estimate()
+{
+    const auto settings = LatencyBudgetCalculator::presetSettings(LatencyPreset::Balanced);
+    AudioDeviceLatency device;
+    device.sampleRateHz = 48000.0;
+    const auto breakdown = LatencyBudgetCalculator::calculate(device, settings);
+
+    const double playback =
+        PlaybackBoundaryMapper::analysisToPlaybackSeconds(0.5, breakdown, 0.0, 99.0);
+    assert(std::abs(playback - (0.5 + 0.099)) < 1.0e-6);
+}
+
 } // namespace
 
 int main()
 {
     maps_analysis_to_playback();
+    measured_end_to_end_overrides_estimate();
     std::cout << "PlaybackBoundaryMapper tests passed\n";
     return 0;
 }

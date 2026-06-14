@@ -75,6 +75,7 @@ The repository currently contains the first phoneme mapping slice:
 - **`InferenceLatencyTracker`** maintains a clamped moving estimate of ONNX queue+inference lag; shell **`onnx`** lines include `lag_ms` and `lag_est_ms`.
 - **`PlaybackBoundaryMapper`** and **`UtteranceSustainReleasePolicy`** map analysis boundaries to playback-time sustain release (`sustain_release` JSON). Offline render honors `RenderEvent::perceivedUtteranceEndSeconds` to truncate sustain loops.
 - **`PhonemeMappingConfigLoader`** reads `phoneme_to_japanese.json` (user app-data, optional `shell_settings.json` `phonemeMappingPath`, or repo `config/phoneme_to_japanese.json`) and merges overrides onto built-in defaults for **`PhonemeFallbackMapper`** / offline mapping.
+- **`LoopbackLatencyMeasurer`** injects a short probe on the output pass-through and estimates round-trip delay via normalized cross-correlation on the input (requires output→input loopback). The JUCE shell exposes **Measure loopback latency**, logs `latency_measure` JSON, and uses the measurement to augment effective end-to-end latency for playback boundary mapping when valid.
 
 ## Build
 
