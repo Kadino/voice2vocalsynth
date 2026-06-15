@@ -58,6 +58,187 @@ This document captures the **gap analysis and prioritized plan** agreed for Voic
       backend bakeoffs.
 - [ ] Train or integrate a streaming ARPABET-classifier ONNX matching stabilizer input/output contracts.
 
+## Next execution plan — backend bakeoff → live synthesis
+
+This section is the current handoff plan for future agents/programmers. Execute
+items in order unless a later task is explicitly needed to unblock validation.
+
+### 1. Add a phoneme evaluation CLI
+
+**Goal:** Make backend comparisons runnable outside unit tests.
+
+- Add a small executable target, e.g. `Voice2VocalSynthPhonemeEval`.
+- Inputs:
+  - `--reference <reference_frames.json>`
+  - `--prediction <predicted_frames.json>`
+  - optional `--out <metrics.json>`
+  - optional thresholds mirroring `PhonemeEvaluationOptions`
+    (`--max-onset-error-ms`, `--min-overlap-ms`).
+- Use existing core APIs:
+  - `loadPhonemeFrameLabelsJson`
+  - `evaluatePhonemeFrames`
+  - `phonemeEvaluationMetricsToJson`
+- Expected output:
+  - stdout summary for quick inspection,
+  - JSON metrics file when `--out` is provided.
+- Validation:
+  - Unit test the argument-independent evaluator code.
+  - Add a fixture pair under `tests/fixtures/phoneme_eval/` if it contains no
+    private recorded audio.
+
+### 2. Define the real streaming phoneme backend adapter contract
+
+**Goal:** Remove ambiguity before integrating candidate models.
+
+- Extend or document `IPhonemeBackend` with model-facing assumptions:
+  - expected sample rate,
+  - frame/window length,
+  - hop size,
+  - whether samples or features are passed,
+  - output phoneme inventory,
+  - timestamp semantics,
+  - confidence normalization range.
+- Keep `PlaceholderPitchPhonemeBackend` as an explicit debug backend.
+- Decide whether the first real ONNX adapter consumes:
+  - raw mono PCM windows, or
+  - precomputed features such as log-mel frames.
+- Acceptance criteria:
+  - another backend can be added without editing `PhonemeTemporalStabilizer`;
+  - output is `PhonemeTemporalObservation` or directly convertible to it.
+
+### 3. Add an ONNX phoneme backend adapter
+
+**Goal:** Convert ONNX Runtime tensor output into phoneme observations.
+
+- Keep `PhonemeOnnxRunner` as low-level model execution.
+- Add an adapter above it, e.g. `PhonemeOnnxBackend`.
+- Responsibilities:
+  - load model metadata/config,
+  - prepare input tensor/features,
+  - decode output logits/probabilities into ARPABET labels,
+  - attach stream timestamps and confidence,
+  - return `PhonemeBackendResult`.
+- Do not assume all ONNX models have the same output layout; use a sidecar JSON
+  model config if needed:
+
+```json
+{
+  "sampleRateHz": 16000,
+  "windowMs": 160,
+  "hopMs": 20,
+  "inputKind": "monoPcm",
+  "labels": ["sil", "AA", "AE", "AH"]
+}
+```
+
+### 4. Build private evaluation data outside the repo
+
+**Goal:** Compare backends on the user's actual target sounds without committing
+private voice data.
+
+- Store recordings and labels outside Git, for example:
+  - `%LOCALAPPDATA%/Voice2VocalSynth/EvalData` on Windows,
+  - a user-selected private data folder from app settings.
+- Do **not** commit WAV recordings or private labels.
+- Suggested first dataset:
+  - spoken vowels,
+  - sung vowels,
+  - whispered vowels,
+  - plosives: `P T K B D G`,
+  - fricatives: `S SH F TH V Z`,
+  - nasals: `M N NG`,
+  - `R/L/W/Y`,
+  - nonsense syllables,
+  - whistle examples.
+- Label format should match the JSON accepted by
+  `loadPhonemeFrameLabelsJson`:
+
+```json
+[
+  { "arpabet": "K", "start": 0.120, "end": 0.165, "confidence": 1.0 },
+  { "arpabet": "AE", "start": 0.165, "end": 0.410, "confidence": 1.0 },
+  { "arpabet": "T", "start": 0.410, "end": 0.455, "confidence": 1.0 }
+]
+```
+
+### 5. Run backend bakeoffs
+
+**Goal:** Determine if another backend performs better using objective metrics.
+
+- Compare at minimum:
+  - `PlaceholderPitchPhonemeBackend` baseline,
+  - first real ONNX phoneme backend,
+  - any alternative candidate model/backend.
+- Score both:
+  - raw backend observations converted to frames, and
+  - post-`PhonemeTemporalStabilizer` committed frames.
+- Required metrics:
+  - precision,
+  - recall,
+  - F1,
+  - missed consonant count/rate,
+  - false-positive count/rate,
+  - mean absolute onset error,
+  - P95 onset error (add this metric if not present yet),
+  - backend latency and P95 latency.
+- Backend is "better" only if it improves phoneme/timing metrics without
+  exceeding the latency mode being tested.
+
+### 6. Promote backend selection into the JUCE shell
+
+**Goal:** Make live testing switchable without recompiling.
+
+- Add live backend mode choices:
+  - placeholder/debug,
+  - ONNX phoneme backend,
+  - optionally recorded-fixture playback.
+- Persist choice in `shell_settings.json`.
+- Live log should identify backend name in `ph_frame` or adjacent diagnostic
+  JSON lines.
+- Keep the ONNX identity/stub path only as a plumbing smoke test; do not treat it
+  as phoneme detection.
+
+### 7. Close the live synthesis loop
+
+**Goal:** Move from live analysis logging to live synthesized output.
+
+- Pipeline target:
+  - microphone chunk,
+  - pitch/VAD/whistle/phoneme backend,
+  - temporal stabilizer,
+  - voicebank mapping plan,
+  - render plan,
+  - streaming render buffer,
+  - JUCE output.
+- Initial version may use the existing naive/offline renderer logic adapted to a
+  buffered streaming scheduler.
+- Keep debug timeline export enabled so every live test can inspect:
+  - detected phonemes,
+  - selected aliases,
+  - skipped aliases,
+  - pitch target,
+  - latency estimate,
+  - render timing.
+
+### 8. Windows validation and Wine guidance
+
+**Goal:** Avoid false confidence from Linux-only testing.
+
+- Linux JUCE compile smoke tests are useful for source-level errors.
+- Wine can be used only as a rough launch/UI smoke test for a Windows binary.
+- Wine is **not** sufficient for validating:
+  - WASAPI/ASIO behavior,
+  - Windows device enumeration,
+  - virtual audio cable routing,
+  - project-owned virtual microphone behavior,
+  - real latency measurements.
+- Required before relying on live audio behavior:
+  - build on Windows,
+  - run with the target microphone,
+  - run with monitor output,
+  - run with an existing virtual audio device such as VB-CABLE/VoiceMeeter,
+  - capture latency and debug logs from that environment.
+
 ## Reference: major spec gaps (summary)
 
 | Area | Spec | Repo (pre–live-MVP) |
