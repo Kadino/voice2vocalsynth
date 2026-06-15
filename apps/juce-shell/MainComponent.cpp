@@ -5,6 +5,7 @@
 #include "Voice2VocalSynth/PitchTarget.h"
 #include "Voice2VocalSynth/RenderPlanner.h"
 #include "Voice2VocalSynth/SimplePitchEstimator.h"
+#include "Voice2VocalSynth/EvalDataPaths.h"
 #include "Voice2VocalSynth/PhonemeMappingConfigLoader.h"
 #include "Voice2VocalSynth/VoicebankMappingPlanner.h"
 #include "Voice2VocalSynth/InferenceLatencyTracker.h"
@@ -147,6 +148,7 @@ MainComponent::MainComponent()
     addAndMakeVisible(offlineNoteEditor_);
 
     loadShellSettingsFromDisk();
+    rebuildActivePhonemeBackend();
 
     latencyPresetCombo_.onChange = [this] {
         const int id = latencyPresetCombo_.getSelectedId();
@@ -193,6 +195,16 @@ MainComponent::MainComponent()
     livePipelineLabel_.setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(livePipelineLabel_);
 
+    livePhonemeBackendCombo_.addItem("Placeholder pitch gate", 1);
+#if defined(VOICE2VOCALSYNTH_WITH_ONNX)
+    livePhonemeBackendCombo_.addItem("ONNX phoneme backend", 2);
+#endif
+    livePhonemeBackendCombo_.onChange = [this] {
+        rebuildActivePhonemeBackend();
+        saveShellSettings();
+    };
+    addAndMakeVisible(livePhonemeBackendCombo_);
+
     liveOnnxToggle_.setTooltip(
         "When enabled (and this build includes ONNX), enqueue downsampled mono frames into the "
         "repository identity model to exercise async inference timestamps.");
@@ -204,6 +216,17 @@ MainComponent::MainComponent()
 #endif
     liveOnnxToggle_.onClick = [this] { saveShellSettings(); };
     addAndMakeVisible(liveOnnxToggle_);
+
+    liveSynthesisToggle_.setTooltip(
+        "When enabled and a live voicebank is configured, committed phoneme frames are mapped "
+        "and mixed into monitor output.");
+    liveSynthesisToggle_.onClick = [this] { saveShellSettings(); };
+    addAndMakeVisible(liveSynthesisToggle_);
+
+    chooseLiveVoicebankButton_.onClick = [this] { chooseLiveVoicebank(); };
+    addAndMakeVisible(chooseLiveVoicebankButton_);
+    liveVoicebankLabel_.setJustificationType(juce::Justification::centredLeft);
+    addAndMakeVisible(liveVoicebankLabel_);
 
     livePipelineLog_.setMultiLine(true);
     livePipelineLog_.setReadOnly(true);
@@ -225,7 +248,7 @@ MainComponent::MainComponent()
     deviceManager.addChangeListener(this);
     deviceManager.addAudioCallback(this);
 
-    setSize(640, 780);
+    setSize(640, 860);
     startTimerHz(15);
     refreshLatencyDisplay();
 }
@@ -289,8 +312,17 @@ void MainComponent::resized()
     breakdownEditor_.setBounds(r.removeFromTop(200));
     r.removeFromTop(8);
     livePipelineLabel_.setBounds(r.removeFromTop(20));
-    auto onnxRow = r.removeFromTop(26);
-    liveOnnxToggle_.setBounds(onnxRow.removeFromLeft(260));
+    auto backendRow = r.removeFromTop(26);
+    livePhonemeBackendCombo_.setBounds(backendRow.removeFromLeft(280));
+    backendRow.removeFromLeft(10);
+    liveOnnxToggle_.setBounds(backendRow);
+    r.removeFromTop(6);
+    auto synthRow = r.removeFromTop(26);
+    liveSynthesisToggle_.setBounds(synthRow.removeFromLeft(220));
+    synthRow.removeFromLeft(10);
+    chooseLiveVoicebankButton_.setBounds(synthRow.removeFromLeft(160));
+    r.removeFromTop(4);
+    liveVoicebankLabel_.setBounds(r.removeFromTop(22));
     r.removeFromTop(6);
     livePipelineLog_.setBounds(r);
 }
@@ -321,6 +353,18 @@ void MainComponent::audioDeviceIOCallbackWithContext(const float* const* inputCh
         if (outputChannelData[ch] != nullptr) {
             juce::FloatVectorOperations::clear(outputChannelData[ch], numSamples);
         }
+    }
+
+    if (liveSynthesisToggle_.getToggleState() && liveRenderer_.configured() && liveSampleRateHz_ > 0.0 &&
+        outputChannelData[0] != nullptr) {
+        const std::uint64_t playbackSample = livePlaybackSamples_.load(std::memory_order_relaxed);
+        const double playbackSec = static_cast<double>(playbackSample) / liveSampleRateHz_;
+        std::vector<float> synth(static_cast<std::size_t>(numSamples), 0.0F);
+        liveRenderer_.renderBlock(synth.data(), numSamples, playbackSec, liveSampleRateHz_);
+        for (int i = 0; i < numSamples; ++i) {
+            outputChannelData[0][i] = 0.5F * outputChannelData[0][i] + synth[static_cast<std::size_t>(i)];
+        }
+        livePlaybackSamples_.fetch_add(static_cast<std::uint64_t>(numSamples), std::memory_order_relaxed);
     }
 
     std::vector<float> mono(static_cast<std::size_t>(numSamples), 0.0F);
@@ -364,6 +408,7 @@ void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* device)
         liveMonoTail_.clear();
     }
     liveSamplesSeen_.store(0, std::memory_order_relaxed);
+    livePlaybackSamples_.store(0, std::memory_order_relaxed);
     phonemeThrottleCounter_ = 0;
     pitchTracker_.clear();
     phonemeStabilizer_.reset();
@@ -374,6 +419,7 @@ void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* device)
     loopbackMeasurer_.reset();
     loopbackResultLogged_ = false;
     whistleModeActive_ = false;
+    liveRenderer_.reset();
     if (device != nullptr) {
         liveSampleRateHz_ = device->getCurrentSampleRate();
     }
@@ -432,6 +478,11 @@ void MainComponent::saveShellSettings()
     obj->setProperty("offlinePhonemes", offlinePhonemesEditor_.getText());
     obj->setProperty("offlineNote", offlineNoteEditor_.getText());
     obj->setProperty("liveOnnxStub", liveOnnxToggle_.getToggleState());
+    obj->setProperty("livePhonemeBackend",
+                      livePhonemeBackendCombo_.getSelectedId() == 2 ? "onnx_phoneme" : "placeholder");
+    obj->setProperty("liveSynthesisEnabled", liveSynthesisToggle_.getToggleState());
+    obj->setProperty("liveVoicebankPath", liveVoicebankPath_);
+    obj->setProperty("evalDataFolder", evalDataFolderPath_);
 
     const auto f = shellSettingsFile();
     (void)f.getParentDirectory().createDirectory();
@@ -452,6 +503,11 @@ void MainComponent::loadShellSettingsFromDisk()
 
     const auto f = shellSettingsFile();
     if (!f.existsAsFile()) {
+        evalDataFolderPath_ = juce::String(Voice2VocalSynth::defaultEvalDataRoot().string());
+        std::string layoutError;
+        (void)Voice2VocalSynth::ensureEvalDataLayout(
+            std::filesystem::path(evalDataFolderPath_.toStdString()), layoutError);
+        liveVoicebankLabel_.setText("Live voicebank: (not set)", juce::dontSendNotification);
         return;
     }
 
@@ -485,6 +541,36 @@ void MainComponent::loadShellSettingsFromDisk()
     if (parsed.hasProperty("liveOnnxStub")) {
         liveOnnxToggle_.setToggleState(static_cast<bool>(parsed.getProperty("liveOnnxStub", true)),
                                        juce::dontSendNotification);
+    }
+    if (parsed.hasProperty("livePhonemeBackend")) {
+        const juce::String backend = parsed.getProperty("livePhonemeBackend", "placeholder").toString();
+        livePhonemeBackendCombo_.setSelectedId(backend == "onnx_phoneme" ? 2 : 1, juce::dontSendNotification);
+    }
+    if (parsed.hasProperty("liveSynthesisEnabled")) {
+        liveSynthesisToggle_.setToggleState(static_cast<bool>(parsed.getProperty("liveSynthesisEnabled", false)),
+                                            juce::dontSendNotification);
+    }
+    if (parsed.hasProperty("liveVoicebankPath")) {
+        liveVoicebankPath_ = parsed.getProperty("liveVoicebankPath", {}).toString();
+    }
+    if (parsed.hasProperty("evalDataFolder")) {
+        evalDataFolderPath_ = parsed.getProperty("evalDataFolder", {}).toString();
+    } else {
+        evalDataFolderPath_ = juce::String(Voice2VocalSynth::defaultEvalDataRoot().string());
+    }
+
+    {
+        std::string layoutError;
+        const auto evalRoot = std::filesystem::path(evalDataFolderPath_.toStdString());
+        (void)Voice2VocalSynth::ensureEvalDataLayout(evalRoot, layoutError);
+    }
+
+    if (liveVoicebankPath_.isNotEmpty()) {
+        std::string configureError;
+        (void)liveRenderer_.configure(std::filesystem::path(liveVoicebankPath_.toStdString()), configureError);
+        liveVoicebankLabel_.setText("Live voicebank: " + liveVoicebankPath_, juce::dontSendNotification);
+    } else {
+        liveVoicebankLabel_.setText("Live voicebank: (not set)", juce::dontSendNotification);
     }
 }
 
@@ -597,21 +683,27 @@ void MainComponent::livePipelineTimerTick()
         backendFrame.monoSamples.assign(ptr, ptr + win);
         backendFrame.sampleRateHz = liveSampleRateHz_;
         backendFrame.streamTimeStartSeconds = streamSec - (static_cast<double>(win) / liveSampleRateHz_);
-        const auto backendResult = placeholderPhonemeBackend_.process(backendFrame);
-        if (backendResult.ok) {
-            for (const auto& ob : backendResult.observations) {
-                phonemeStabilizer_.observe(ob);
+        if (auto* backend = activePhonemeBackend()) {
+            const auto backendResult = backend->process(backendFrame);
+            if (backendResult.ok) {
+                for (const auto& ob : backendResult.observations) {
+                    phonemeStabilizer_.observe(ob);
+                }
             }
         }
     }
     Voice2VocalSynth::PhonemeFrame phFrame;
     while (phonemeStabilizer_.try_pop_committed(phFrame)) {
+        if (liveSynthesisToggle_.getToggleState() && liveRenderer_.configured()) {
+            liveRenderer_.onCommittedPhoneme(phFrame, target, playbackNow);
+        }
         std::ostringstream cl;
         cl.setf(std::ios::fixed);
         cl.precision(5);
-        cl << "{\"kind\":\"ph_frame\",\"arpabet\":\"" << phFrame.arpabet << "\",\"conf\":" << phFrame.confidence
-           << ",\"t0\":" << phFrame.estimatedOnsetSeconds << ",\"t1\":" << phFrame.estimatedEndSeconds
-           << ",\"vowel\":" << (phFrame.isVowel ? "true" : "false")
+        const char* backendName = activePhonemeBackend() ? activePhonemeBackend()->name() : "none";
+        cl << "{\"kind\":\"ph_frame\",\"backend\":\"" << backendName << "\",\"arpabet\":\"" << phFrame.arpabet
+           << "\",\"conf\":" << phFrame.confidence << ",\"t0\":" << phFrame.estimatedOnsetSeconds
+           << ",\"t1\":" << phFrame.estimatedEndSeconds << ",\"vowel\":" << (phFrame.isVowel ? "true" : "false")
            << ",\"consonant\":" << (phFrame.isConsonant ? "true" : "false") << "}";
         pushLiveLogLine(cl.str());
     }
@@ -870,4 +962,69 @@ double MainComponent::measuredEndToEndMsForMapping() const
 
     const auto measurement = loopbackMeasurer_.result();
     return measurement.valid ? measurement.round_trip_ms : 0.0;
+}
+
+void MainComponent::rebuildActivePhonemeBackend()
+{
+#if defined(VOICE2VOCALSYNTH_WITH_ONNX)
+    phonemeOnnxBackend_.reset();
+    if (livePhonemeBackendCombo_.getSelectedId() == 2) {
+        Voice2VocalSynth::PhonemeOnnxBackendOptions options;
+        options.modelPath = std::filesystem::path{VOICE2VOCALSYNTH_REPOSITORY_PHONEME_ONNX_FIXTURE};
+        options.configPath = std::filesystem::path{VOICE2VOCALSYNTH_REPOSITORY_ROOT} /
+                             "tests/fixtures/onnx/dummy_identity.phoneme.json";
+        phonemeOnnxBackend_ = std::make_unique<Voice2VocalSynth::PhonemeOnnxBackend>(std::move(options));
+        std::string error;
+        if (!phonemeOnnxBackend_->load(error)) {
+            juce::Logger::writeToLog("Voice2VocalSynth: phoneme ONNX backend load failed: " +
+                                     juce::String(error.c_str()));
+            phonemeOnnxBackend_.reset();
+            livePhonemeBackendCombo_.setSelectedId(1, juce::dontSendNotification);
+        }
+    }
+#else
+    juce::ignoreUnused(this);
+#endif
+}
+
+Voice2VocalSynth::IPhonemeBackend* MainComponent::activePhonemeBackend()
+{
+#if defined(VOICE2VOCALSYNTH_WITH_ONNX)
+    if (livePhonemeBackendCombo_.getSelectedId() == 2 && phonemeOnnxBackend_ && phonemeOnnxBackend_->loaded()) {
+        return phonemeOnnxBackend_.get();
+    }
+#endif
+    return &placeholderPhonemeBackend_;
+}
+
+void MainComponent::chooseLiveVoicebank()
+{
+    const auto folderFlags = juce::FileBrowserComponent::openMode
+                             | juce::FileBrowserComponent::canSelectDirectories;
+    juce::File start;
+    if (liveVoicebankPath_.isNotEmpty()) {
+        start = juce::File(liveVoicebankPath_);
+    }
+    auto dirChooser = std::make_shared<juce::FileChooser>("Select live voicebank folder", start, "*");
+    dirChooser->launchAsync(folderFlags, [this, dirChooser](const juce::FileChooser& fc) {
+        juce::ignoreUnused(dirChooser);
+        const juce::File dir = fc.getResult();
+        if (!dir.isDirectory()) {
+            return;
+        }
+
+        liveVoicebankPath_ = dir.getFullPathName();
+        std::string error;
+        if (!liveRenderer_.configure(std::filesystem::path(liveVoicebankPath_.toStdString()), error)) {
+            juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon,
+                                                    "Live voicebank",
+                                                    juce::String(error.c_str()));
+            liveVoicebankPath_.clear();
+            liveVoicebankLabel_.setText("Live voicebank: (not set)", juce::dontSendNotification);
+            return;
+        }
+
+        liveVoicebankLabel_.setText("Live voicebank: " + liveVoicebankPath_, juce::dontSendNotification);
+        saveShellSettings();
+    });
 }

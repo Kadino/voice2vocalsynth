@@ -42,4 +42,5 @@ target_compile_features(Voice2VocalSynthApp PRIVATE cxx_std_20)
 
 target_compile_definitions(Voice2VocalSynthApp
     PRIVATE
+        "VOICE2VOCALSYNTH_REPOSITORY_ROOT=\"${_repo_root_slash}\""
         "VOICE2VOCALSYNTH_REPOSITORY_PHONEME_ONNX_FIXTURE=\"${_phoneme_fixture_slash}\"")

@@ -136,7 +136,7 @@ items in order unless a later task is explicitly needed to unblock validation.
 **Goal:** Compare backends on the user's actual target sounds without committing
 private voice data.
 
-- Store recordings and labels outside Git, for example:
+- [x] Store recordings and labels outside Git, for example:
   - `%LOCALAPPDATA%/Voice2VocalSynth/EvalData` on Windows,
   - a user-selected private data folder from app settings.
 - Do **not** commit WAV recordings or private labels.
@@ -165,7 +165,7 @@ private voice data.
 
 **Goal:** Determine if another backend performs better using objective metrics.
 
-- Compare at minimum:
+- [x] Compare at minimum:
   - `PlaceholderPitchPhonemeBackend` baseline,
   - first real ONNX phoneme backend,
   - any alternative candidate model/backend.
@@ -188,7 +188,7 @@ private voice data.
 
 **Goal:** Make live testing switchable without recompiling.
 
-- Add live backend mode choices:
+- [x] Add live backend mode choices:
   - placeholder/debug,
   - ONNX phoneme backend,
   - optionally recorded-fixture playback.
@@ -202,7 +202,7 @@ private voice data.
 
 **Goal:** Move from live analysis logging to live synthesized output.
 
-- Pipeline target:
+- [x] Pipeline target:
   - microphone chunk,
   - pitch/VAD/whistle/phoneme backend,
   - temporal stabilizer,

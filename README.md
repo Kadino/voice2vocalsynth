@@ -77,8 +77,16 @@ The repository currently contains the first phoneme mapping slice:
   debug path. **`PhonemeOnnxBackend`** adapts ONNX Runtime output into
   `PhonemeTemporalObservation` values using a sidecar `.phoneme.json` model
   config. **`PhonemeEvaluation`** provides initial precision/recall/F1
-  and onset-error metrics for comparing future backends against labeled frames.
-  The **`Voice2VocalSynthPhonemeEval`** CLI runs those metrics outside unit tests.
+  and onset-error metrics (including P95 onset error and consonant miss rates) for
+  comparing backends against labeled frames. The **`Voice2VocalSynthPhonemeEval`**
+  CLI runs those metrics outside unit tests. **`Voice2VocalSynthPhonemeBakeoff`**
+  compares backends on private eval WAV/label pairs with raw and stabilized scores.
+  Private eval data defaults to `%LOCALAPPDATA%/Voice2VocalSynth/EvalData` (or
+  `~/.local/share/Voice2VocalSynth/EvalData` on Linux).
+- **`StreamingLiveRenderer`** schedules per-phoneme offline renders into a buffered
+  playback mix. The JUCE shell exposes switchable live phoneme backends
+  (`placeholder` / `onnx_phoneme`), persists choices in `shell_settings.json`, and
+  can mix live synthesis output when a voicebank is configured.
 - **`WhistleDetector`** (Goertzel HNR-style proxy) runs in parallel with phoneme ONNX; live log emits `whistle` / `whistle_edge` JSON and bypasses the phoneme stabilizer placeholder while whistle mode is active.
 - **`VoiceActivityDetector`** emits timestamped **`speech_onset`** / **`speech_end`** on the stream clock; the JUCE live log records them as **`vad`** JSON.
 - **`InferenceLatencyTracker`** maintains a clamped moving estimate of ONNX queue+inference lag; shell **`onnx`** lines include `lag_ms` and `lag_est_ms`.

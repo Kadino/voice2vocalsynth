@@ -1,4 +1,5 @@
 #include "Voice2VocalSynth/PhonemeEvaluation.h"
+#include "Voice2VocalSynth/PhonemeFallbackMapper.h"
 
 #include <algorithm>
 #include <cmath>
@@ -312,6 +313,35 @@ bool boolValue(const JsonObject& object, const char* key, bool fallback = false)
 
 } // namespace
 
+bool phonemeFrameIsConsonant(const PhonemeFrame& frame)
+{
+    if (frame.isConsonant) {
+        return true;
+    }
+    if (frame.isVowel) {
+        return false;
+    }
+    return !PhonemeFallbackMapper::isArpabetVowel(frame.arpabet);
+}
+
+double percentileSeconds(const std::vector<double>& valuesSeconds, double quantile)
+{
+    if (valuesSeconds.empty()) {
+        return 0.0;
+    }
+    auto sorted = valuesSeconds;
+    std::sort(sorted.begin(), sorted.end());
+    const double clamped = std::clamp(quantile, 0.0, 1.0);
+    const double position = clamped * static_cast<double>(sorted.size() - 1);
+    const auto lower = static_cast<std::size_t>(std::floor(position));
+    const auto upper = static_cast<std::size_t>(std::ceil(position));
+    if (lower == upper) {
+        return sorted[lower];
+    }
+    const double fraction = position - static_cast<double>(lower);
+    return sorted[lower] * (1.0 - fraction) + sorted[upper] * fraction;
+}
+
 PhonemeEvaluationMetrics evaluatePhonemeFrames(
     const std::vector<PhonemeFrame>& reference,
     const std::vector<PhonemeFrame>& prediction,
@@ -323,8 +353,13 @@ PhonemeEvaluationMetrics evaluatePhonemeFrames(
 
     std::vector<bool> predictionUsed(prediction.size(), false);
     double onsetErrorSumSeconds = 0.0;
+    std::vector<double> matchedOnsetErrorsSeconds;
 
     for (const auto& ref : reference) {
+        if (phonemeFrameIsConsonant(ref)) {
+            ++metrics.referenceConsonantCount;
+        }
+
         std::size_t bestIndex = prediction.size();
         double bestOverlap = 0.0;
         double bestOnsetError = std::numeric_limits<double>::infinity();
@@ -348,12 +383,16 @@ PhonemeEvaluationMetrics evaluatePhonemeFrames(
 
         if (bestIndex == prediction.size()) {
             ++metrics.missedCount;
+            if (phonemeFrameIsConsonant(ref)) {
+                ++metrics.missedConsonantCount;
+            }
             continue;
         }
 
         predictionUsed[bestIndex] = true;
         ++metrics.matchedCount;
         onsetErrorSumSeconds += bestOnsetError;
+        matchedOnsetErrorsSeconds.push_back(bestOnsetError);
     }
 
     metrics.falsePositiveCount = static_cast<std::size_t>(
@@ -375,6 +414,16 @@ PhonemeEvaluationMetrics evaluatePhonemeFrames(
     if (metrics.matchedCount > 0) {
         metrics.meanAbsoluteOnsetErrorMs =
             (onsetErrorSumSeconds * 1000.0) / static_cast<double>(metrics.matchedCount);
+        metrics.p95OnsetErrorMs =
+            percentileSeconds(matchedOnsetErrorsSeconds, 0.95) * 1000.0;
+    }
+    if (metrics.predictionCount > 0) {
+        metrics.falsePositiveRate = static_cast<double>(metrics.falsePositiveCount) /
+                                    static_cast<double>(metrics.predictionCount);
+    }
+    if (metrics.referenceConsonantCount > 0) {
+        metrics.missedConsonantRate = static_cast<double>(metrics.missedConsonantCount) /
+                                      static_cast<double>(metrics.referenceConsonantCount);
     }
 
     return metrics;
@@ -455,10 +504,15 @@ std::string phonemeEvaluationMetricsToJson(const PhonemeEvaluationMetrics& metri
     json << "  \"substitutionOrTimingErrorCount\": " << metrics.substitutionOrTimingErrorCount << ",\n";
     json << "  \"missedCount\": " << metrics.missedCount << ",\n";
     json << "  \"falsePositiveCount\": " << metrics.falsePositiveCount << ",\n";
+    json << "  \"referenceConsonantCount\": " << metrics.referenceConsonantCount << ",\n";
+    json << "  \"missedConsonantCount\": " << metrics.missedConsonantCount << ",\n";
     json << "  \"precision\": " << metrics.precision << ",\n";
     json << "  \"recall\": " << metrics.recall << ",\n";
     json << "  \"f1\": " << metrics.f1 << ",\n";
-    json << "  \"meanAbsoluteOnsetErrorMs\": " << metrics.meanAbsoluteOnsetErrorMs << "\n";
+    json << "  \"falsePositiveRate\": " << metrics.falsePositiveRate << ",\n";
+    json << "  \"missedConsonantRate\": " << metrics.missedConsonantRate << ",\n";
+    json << "  \"meanAbsoluteOnsetErrorMs\": " << metrics.meanAbsoluteOnsetErrorMs << ",\n";
+    json << "  \"p95OnsetErrorMs\": " << metrics.p95OnsetErrorMs << "\n";
     json << "}\n";
     return json.str();
 }

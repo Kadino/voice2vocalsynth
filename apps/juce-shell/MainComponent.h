@@ -10,6 +10,7 @@
 #include "Voice2VocalSynth/PitchHistory.h"
 #include "Voice2VocalSynth/PitchTarget.h"
 #include "Voice2VocalSynth/PlaybackBoundaryMapper.h"
+#include "Voice2VocalSynth/StreamingLiveRenderer.h"
 #include "Voice2VocalSynth/UtteranceSustainReleasePolicy.h"
 #include "Voice2VocalSynth/VoiceActivityDetector.h"
 #include "Voice2VocalSynth/WhistleDetector.h"
@@ -62,6 +63,9 @@ private:
 
     void livePipelineTimerTick();
     void pushLiveLogLine(const std::string& line);
+    void rebuildActivePhonemeBackend();
+    [[nodiscard]] Voice2VocalSynth::IPhonemeBackend* activePhonemeBackend();
+    void chooseLiveVoicebank();
 
     void offlineRenderTest();
     void runOfflineRenderToFile(const juce::File& voicebankDirectory, const juce::File& outputWavFile);
@@ -86,7 +90,11 @@ private:
     juce::Label breakdownLabel_;
     juce::TextEditor breakdownEditor_;
     juce::Label livePipelineLabel_;
+    juce::ComboBox livePhonemeBackendCombo_;
     juce::ToggleButton liveOnnxToggle_ {"ONNX stub (identity)"};
+    juce::ToggleButton liveSynthesisToggle_ {"Live synthesis output"};
+    juce::TextButton chooseLiveVoicebankButton_ {"Live voicebank..."};
+    juce::Label liveVoicebankLabel_;
     juce::TextEditor livePipelineLog_;
 
     Voice2VocalSynth::AnalysisLatencySettings analysisSettings_ =
@@ -99,12 +107,19 @@ private:
     Voice2VocalSynth::RecentPitchTracker pitchTracker_;
     Voice2VocalSynth::PitchTargetCalculator pitchCalculator_;
     Voice2VocalSynth::PlaceholderPitchPhonemeBackend placeholderPhonemeBackend_;
+#if defined(VOICE2VOCALSYNTH_WITH_ONNX)
+    std::unique_ptr<Voice2VocalSynth::PhonemeOnnxBackend> phonemeOnnxBackend_;
+#endif
     Voice2VocalSynth::PhonemeTemporalStabilizer phonemeStabilizer_;
     Voice2VocalSynth::VoiceActivityDetector voiceVad_;
     Voice2VocalSynth::WhistleDetector whistleDetector_;
     Voice2VocalSynth::InferenceLatencyTracker inferenceLatency_;
     Voice2VocalSynth::UtteranceSustainReleasePolicy sustainRelease_;
     Voice2VocalSynth::LoopbackLatencyMeasurer loopbackMeasurer_;
+    Voice2VocalSynth::StreamingLiveRenderer liveRenderer_;
+    std::atomic<std::uint64_t> livePlaybackSamples_{0};
+    juce::String liveVoicebankPath_;
+    juce::String evalDataFolderPath_;
     bool whistleModeActive_ = false;
     int phonemeThrottleCounter_ = 0;
     std::deque<std::string> liveLogLines_;
