@@ -3,6 +3,9 @@
 #include "Voice2VocalSynth/PhonemeFrame.h"
 
 #include <cstddef>
+#include <filesystem>
+#include <string>
+#include <string_view>
 #include <vector>
 
 namespace Voice2VocalSynth
@@ -32,5 +35,25 @@ struct PhonemeEvaluationMetrics
     const std::vector<PhonemeFrame>& reference,
     const std::vector<PhonemeFrame>& prediction,
     const PhonemeEvaluationOptions& options = {});
+
+struct PhonemeFrameJsonLoadResult
+{
+    bool ok = false;
+    std::string error;
+    std::vector<PhonemeFrame> frames;
+};
+
+/// Parses an editable JSON array of frame objects:
+/// [
+///   {"arpabet":"K", "start":0.10, "end":0.15, "confidence":0.9},
+///   {"arpabet":"AE", "estimatedOnsetSeconds":0.15, "estimatedEndSeconds":0.40}
+/// ]
+[[nodiscard]] PhonemeFrameJsonLoadResult parsePhonemeFrameLabelsJson(std::string_view json);
+
+[[nodiscard]] PhonemeFrameJsonLoadResult loadPhonemeFrameLabelsJson(
+    const std::filesystem::path& path);
+
+[[nodiscard]] std::string phonemeEvaluationMetricsToJson(
+    const PhonemeEvaluationMetrics& metrics);
 
 } // namespace Voice2VocalSynth

@@ -74,6 +74,8 @@ The repository currently contains the first phoneme mapping slice:
   **`PlaceholderPitchPhonemeBackend`** implements the current pitch-gated `AH`
   debug path, and **`PhonemeEvaluation`** provides initial precision/recall/F1
   and onset-error metrics for comparing future backends against labeled frames.
+  Evaluation labels/predictions can be loaded from editable JSON arrays of
+  `PhonemeFrame` objects and metrics can be exported as JSON reports.
 - **`WhistleDetector`** (Goertzel HNR-style proxy) runs in parallel with phoneme ONNX; live log emits `whistle` / `whistle_edge` JSON and bypasses the phoneme stabilizer placeholder while whistle mode is active.
 - **`VoiceActivityDetector`** emits timestamped **`speech_onset`** / **`speech_end`** on the stream clock; the JUCE live log records them as **`vad`** JSON.
 - **`InferenceLatencyTracker`** maintains a clamped moving estimate of ONNX queue+inference lag; shell **`onnx`** lines include `lag_ms` and `lag_est_ms`.

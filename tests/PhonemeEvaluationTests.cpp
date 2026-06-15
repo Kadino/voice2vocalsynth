@@ -1,7 +1,10 @@
 #include <Voice2VocalSynth/PhonemeEvaluation.h>
 
 #include <cassert>
+#include <chrono>
 #include <cmath>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 
 namespace
@@ -68,6 +71,67 @@ void handlesPartialMatches()
     assert(nearlyEqual(metrics.recall, 2.0 / 3.0));
 }
 
+std::filesystem::path tempJsonPath()
+{
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    return std::filesystem::temp_directory_path() /
+           ("voice2vocalsynth-phoneme-labels-" + std::to_string(stamp) + ".json");
+}
+
+void parsesEditablePhonemeLabelJson()
+{
+    const auto result = parsePhonemeFrameLabelsJson(
+        "[\n"
+        "  {\"arpabet\":\"K\", \"start\":0.10, \"end\":0.15, \"confidence\":0.8, \"isConsonant\":true},\n"
+        "  {\"arpabet\":\"AE\", \"estimatedOnsetSeconds\":0.15, \"estimatedEndSeconds\":0.40, \"isVowel\":true}\n"
+        "]\n");
+
+    assert(result.ok);
+    assert(result.frames.size() == 2);
+    assert(result.frames[0].arpabet == "K");
+    assert(nearlyEqual(result.frames[0].estimatedOnsetSeconds, 0.10));
+    assert(nearlyEqual(result.frames[0].estimatedEndSeconds, 0.15));
+    assert(result.frames[0].isConsonant);
+    assert(result.frames[1].arpabet == "AE");
+    assert(result.frames[1].isVowel);
+}
+
+void loadsPhonemeLabelJsonFromFile()
+{
+    const auto path = tempJsonPath();
+    {
+        std::ofstream output(path, std::ios::binary);
+        output << "[{\"arpabet\":\"T\", \"start\":0.4, \"end\":0.45}]\n";
+    }
+
+    const auto result = loadPhonemeFrameLabelsJson(path);
+    std::filesystem::remove(path);
+
+    assert(result.ok);
+    assert(result.frames.size() == 1);
+    assert(result.frames[0].arpabet == "T");
+}
+
+void exportsMetricsJsonReport()
+{
+    const auto metrics = evaluatePhonemeFrames(
+        {frame("K", 0.10, 0.15)},
+        {frame("K", 0.11, 0.16)});
+    const auto json = phonemeEvaluationMetricsToJson(metrics);
+
+    assert(json.find("\"schemaVersion\": 1") != std::string::npos);
+    assert(json.find("\"matchedCount\": 1") != std::string::npos);
+    assert(json.find("\"precision\": 1.000000") != std::string::npos);
+    assert(json.find("\"meanAbsoluteOnsetErrorMs\": 10.000000") != std::string::npos);
+}
+
+void rejectsMalformedLabelJson()
+{
+    const auto result = parsePhonemeFrameLabelsJson("{\"arpabet\":\"K\"}");
+    assert(!result.ok);
+    assert(!result.error.empty());
+}
+
 } // namespace
 
 int main()
@@ -75,6 +139,10 @@ int main()
     scoresMatchedFrames();
     rejectsWrongLabelsAndLateOnsets();
     handlesPartialMatches();
+    parsesEditablePhonemeLabelJson();
+    loadsPhonemeLabelJsonFromFile();
+    exportsMetricsJsonReport();
+    rejectsMalformedLabelJson();
 
     std::cout << "PhonemeEvaluation tests passed\n";
     return 0;

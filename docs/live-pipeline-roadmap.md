@@ -54,6 +54,8 @@ This document captures the **gap analysis and prioritized plan** agreed for Voic
       consumers.
 - [x] Add initial phoneme-frame evaluation metrics for comparing candidate
       backends against labeled fixtures.
+- [x] Add file-based JSON label/prediction loading and metrics JSON export for
+      backend bakeoffs.
 - [ ] Train or integrate a streaming ARPABET-classifier ONNX matching stabilizer input/output contracts.
 
 ## Reference: major spec gaps (summary)
