@@ -202,4 +202,16 @@ PhonemeOnnxRunner::RunResult PhonemeOnnxRunner::run(const std::vector<float>& in
 #endif
 }
 
+std::size_t PhonemeOnnxRunner::inputElementCount() const noexcept
+{
+#ifdef VOICE2VOCALSYNTH_WITH_ONNX
+    if (!loaded() || impl_->input_elements <= 0) {
+        return 0;
+    }
+    return static_cast<std::size_t>(impl_->input_elements);
+#else
+    return 0;
+#endif
+}
+
 } // namespace Voice2VocalSynth

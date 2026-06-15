@@ -32,8 +32,10 @@ add_library(Voice2VocalSynthCore
     src/PcmWavReader.cpp
     src/PcmWavWriter.cpp
     src/PhonemeBackend.cpp
+    src/PhonemeEvalCli.cpp
     src/PhonemeEvaluation.cpp
     src/PhonemeOnnxAsyncRunner.cpp
+    src/PhonemeOnnxBackend.cpp
     src/PhonemeOnnxRunner.cpp
     src/PhonemeTemporalStabilizer.cpp
     src/PhonemeFallbackMapper.cpp
@@ -86,6 +88,13 @@ if(VOICE2VOCALSYNTH_BUILD_JUCE_APP)
     endif()
 endif()
 
+add_executable(Voice2VocalSynthPhonemeEval
+    apps/phoneme-eval/main.cpp)
+
+target_link_libraries(Voice2VocalSynthPhonemeEval
+    PRIVATE
+        Voice2VocalSynthCore)
+
 if(VOICE2VOCALSYNTH_BUILD_TESTS)
     enable_testing()
 
@@ -120,6 +129,23 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
 
     add_test(NAME PhonemeBackendTests COMMAND PhonemeBackendTests)
 
+    add_executable(PhonemeOnnxBackendTests
+        tests/PhonemeOnnxBackendTests.cpp)
+
+    target_link_libraries(PhonemeOnnxBackendTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    target_compile_definitions(PhonemeOnnxBackendTests
+        PRIVATE
+            "VOICE2VOCALSYNTH_REPOSITORY_ROOT=\"${_repo_root_slash}\"")
+
+    add_test(NAME PhonemeOnnxBackendTests COMMAND PhonemeOnnxBackendTests)
+
+    if(VOICE2VOCALSYNTH_ONNX_AVAILABLE)
+        voice2vocalsynth_copy_onnx_runtime_runtime_deps(PhonemeOnnxBackendTests)
+    endif()
+
     add_executable(PhonemeEvaluationTests
         tests/PhonemeEvaluationTests.cpp)
 
@@ -128,6 +154,19 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
             Voice2VocalSynthCore)
 
     add_test(NAME PhonemeEvaluationTests COMMAND PhonemeEvaluationTests)
+
+    add_executable(PhonemeEvalCliTests
+        tests/PhonemeEvalCliTests.cpp)
+
+    target_link_libraries(PhonemeEvalCliTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    target_compile_definitions(PhonemeEvalCliTests
+        PRIVATE
+            "VOICE2VOCALSYNTH_REPOSITORY_ROOT=\"${_repo_root_slash}\"")
+
+    add_test(NAME PhonemeEvalCliTests COMMAND PhonemeEvalCliTests)
 
     add_executable(PitchTargetTests
         tests/PitchTargetTests.cpp)

@@ -16,6 +16,21 @@ const char* PlaceholderPitchPhonemeBackend::name() const noexcept
     return "placeholder_pitch_gate";
 }
 
+PhonemeBackendDescriptor PlaceholderPitchPhonemeBackend::descriptor() const
+{
+    PhonemeBackendDescriptor descriptor;
+    descriptor.backendName = name();
+    descriptor.sampleRateHz = options_.sampleRateHz;
+    descriptor.windowMs = 85.0;
+    descriptor.hopMs = 85.0;
+    descriptor.inputKind = PhonemeBackendInputKind::MonoPcm;
+    descriptor.labels = {"sil", options_.voicedArpabet};
+    descriptor.confidenceMin = 0.0;
+    descriptor.confidenceMax = 1.0;
+    descriptor.timestampSemantics = "frame_end_seconds";
+    return descriptor;
+}
+
 PhonemeBackendResult PlaceholderPitchPhonemeBackend::process(const PhonemeBackendAudioFrame& frame)
 {
     PhonemeBackendResult result;

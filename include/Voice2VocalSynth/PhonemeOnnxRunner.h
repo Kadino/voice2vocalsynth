@@ -42,6 +42,9 @@ public:
     /// first input tensor (static shape only; dynamic dimensions are not supported yet).
     [[nodiscard]] RunResult run(const std::vector<float>& input);
 
+    /// Flat element count of the first input tensor after a successful `load()`.
+    [[nodiscard]] std::size_t inputElementCount() const noexcept;
+
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;

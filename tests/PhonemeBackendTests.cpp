@@ -8,15 +8,17 @@ namespace
 {
 using namespace Voice2VocalSynth;
 
-std::vector<float> sine(double frequencyHz, double sampleRateHz, int samples)
+void placeholderDescriptorDocumentsContract()
 {
-    std::vector<float> out(static_cast<std::size_t>(samples));
-    for (int i = 0; i < samples; ++i) {
-        out[static_cast<std::size_t>(i)] =
-            static_cast<float>(0.25 * std::sin(2.0 * 3.14159265358979323846 *
-                                               frequencyHz * static_cast<double>(i) / sampleRateHz));
-    }
-    return out;
+    PlaceholderPitchPhonemeBackend backend;
+    const auto descriptor = backend.descriptor();
+
+    assert(descriptor.backendName == backend.name());
+    assert(descriptor.sampleRateHz > 0.0);
+    assert(descriptor.windowMs > 0.0);
+    assert(descriptor.inputKind == PhonemeBackendInputKind::MonoPcm);
+    assert(!descriptor.labels.empty());
+    assert(descriptor.timestampSemantics == "frame_end_seconds");
 }
 
 void placeholderEmitsAhForVoicedPitch()
@@ -25,7 +27,12 @@ void placeholderEmitsAhForVoicedPitch()
     PhonemeBackendAudioFrame frame;
     frame.sampleRateHz = 48000.0;
     frame.streamTimeStartSeconds = 1.0;
-    frame.monoSamples = sine(220.0, frame.sampleRateHz, 4096);
+    frame.monoSamples.resize(4096);
+    for (std::size_t i = 0; i < frame.monoSamples.size(); ++i) {
+        frame.monoSamples[i] =
+            static_cast<float>(0.25 * std::sin(2.0 * 3.14159265358979323846 *
+                                                 220.0 * static_cast<double>(i) / frame.sampleRateHz));
+    }
 
     const auto result = backend.process(frame);
 
@@ -55,6 +62,7 @@ void placeholderEmitsSilenceForUnvoicedAudio()
 
 int main()
 {
+    placeholderDescriptorDocumentsContract();
     placeholderEmitsAhForVoicedPitch();
     placeholderEmitsSilenceForUnvoicedAudio();
 
