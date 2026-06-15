@@ -1,0 +1,12 @@
+{
+  "sampleRateHz": 48000,
+  "windowMs": 0.67,
+  "hopMs": 0.67,
+  "inputKind": "flatTensor",
+  "labels": [
+    "sil", "AA", "AE", "AH", "AO", "AW", "AY", "B",
+    "CH", "D", "DH", "EH", "ER", "EY", "F", "G",
+    "HH", "IH", "IY", "JH", "K", "L", "M", "N",
+    "NG", "OW", "OY", "P", "R", "S", "SH", "T"
+  ]
+}

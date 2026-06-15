@@ -1,0 +1,5 @@
+[
+  { "arpabet": "K", "start": 0.130, "end": 0.170, "confidence": 0.95 },
+  { "arpabet": "AE", "start": 0.170, "end": 0.405, "confidence": 0.92 },
+  { "arpabet": "T", "start": 0.405, "end": 0.450, "confidence": 0.88 }
+]

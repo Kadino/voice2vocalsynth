@@ -67,7 +67,7 @@ items in order unless a later task is explicitly needed to unblock validation.
 
 **Goal:** Make backend comparisons runnable outside unit tests.
 
-- Add a small executable target, e.g. `Voice2VocalSynthPhonemeEval`.
+- [x] Add a small executable target, e.g. `Voice2VocalSynthPhonemeEval`.
 - Inputs:
   - `--reference <reference_frames.json>`
   - `--prediction <predicted_frames.json>`
@@ -90,7 +90,7 @@ items in order unless a later task is explicitly needed to unblock validation.
 
 **Goal:** Remove ambiguity before integrating candidate models.
 
-- Extend or document `IPhonemeBackend` with model-facing assumptions:
+- [x] Extend or document `IPhonemeBackend` with model-facing assumptions:
   - expected sample rate,
   - frame/window length,
   - hop size,
@@ -110,8 +110,8 @@ items in order unless a later task is explicitly needed to unblock validation.
 
 **Goal:** Convert ONNX Runtime tensor output into phoneme observations.
 
-- Keep `PhonemeOnnxRunner` as low-level model execution.
-- Add an adapter above it, e.g. `PhonemeOnnxBackend`.
+- [x] Keep `PhonemeOnnxRunner` as low-level model execution.
+- [x] Add an adapter above it, e.g. `PhonemeOnnxBackend`.
 - Responsibilities:
   - load model metadata/config,
   - prepare input tensor/features,
