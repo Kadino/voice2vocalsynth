@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Voice2VocalSynth/DebugTimeline.h"
 #include "Voice2VocalSynth/OfflineRenderer.h"
 #include "Voice2VocalSynth/PhonemeFrame.h"
 #include "Voice2VocalSynth/PitchTarget.h"
@@ -35,14 +36,20 @@ public:
 
     [[nodiscard]] bool configured() const noexcept;
     [[nodiscard]] const std::vector<std::string>& warnings() const noexcept;
+    [[nodiscard]] const std::optional<DebugTimeline>& lastTimeline() const noexcept;
 
-    [[nodiscard]] bool configure(const std::filesystem::path& voicebankRoot, std::string& error);
+    [[nodiscard]] bool configure(const std::filesystem::path& voicebankRoot,
+                                 const std::optional<std::filesystem::path>& phonemeMappingPath,
+                                 std::string& error);
 
     void reset();
+    void onUtteranceStart();
+    void onSustainRelease(double playbackTimeSeconds);
 
     void onCommittedPhoneme(const PhonemeFrame& frame,
                             const PitchTarget& pitchTarget,
-                            double playbackScheduleSeconds);
+                            double playbackScheduleSeconds,
+                            double estimatedLatencyMs);
 
     void renderBlock(float* output,
                      int numSamples,
@@ -56,7 +63,12 @@ private:
         std::vector<float> samples;
     };
 
-    void scheduleRenderedEvent(const RenderEvent& event, double playbackScheduleSeconds);
+    void scheduleRenderedEvent(const RenderEvent& event,
+                               const VoicebankMappingPlan& mapping,
+                               const RenderPlan& renderPlan,
+                               const PitchTarget& pitchTarget,
+                               double playbackScheduleSeconds,
+                               double estimatedLatencyMs);
 
     StreamingLiveRendererOptions options_;
     bool configured_ = false;
@@ -65,6 +77,8 @@ private:
     std::deque<ScheduledChunk> scheduled_;
     std::vector<std::string> warnings_;
     std::string lastScheduledPhoneme_;
+    std::optional<double> sustainReleasePlaybackSeconds_;
+    std::optional<DebugTimeline> lastTimeline_;
 };
 
 } // namespace Voice2VocalSynth

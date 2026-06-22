@@ -220,11 +220,21 @@ private voice data.
   - latency estimate,
   - render timing.
 
+### Pre-manual-testing polish (completed)
+
+These items harden the live shell and bakeoff tooling before Windows audio validation:
+
+- [x] Wire `WhistleDetector` in the live shell (`whistle` / `whistle_edge` JSON, `is_active()` bypasses phoneme placeholder).
+- [x] Export `live_timeline` debug JSON from `StreamingLiveRenderer::lastTimeline()`.
+- [x] Forward `sustain_release` playback time into live renderer truncation (`onSustainRelease` / `onUtteranceStart`).
+- [x] Shell ONNX phoneme model paths in `shell_settings.json` (`phonemeOnnxModelPath`, `phonemeOnnxConfigPath`, `phonemeOnnxUseRepositoryFixture`, `phonemeMappingPath`).
+- [x] Batch bakeoff CLI: `--all-clips` with `listEvalClipNames()` over private eval data layout.
+
 ### 8. Windows validation and Wine guidance
 
 **Goal:** Avoid false confidence from Linux-only testing.
 
-- Linux JUCE compile smoke tests are useful for source-level errors.
+- [x] Linux JUCE compile smoke tests in CI (`.github/workflows/ci.yml`: core `ctest` + `Voice2VocalSynthApp` build).
 - Wine can be used only as a rough launch/UI smoke test for a Windows binary.
 - Wine is **not** sufficient for validating:
   - WASAPI/ASIO behavior,

@@ -68,11 +68,13 @@ void boundary_state_machine_emits_on_off()
     const auto buf = makeSine(sr, 1000.0, n);
 
     WhistleDetector detector;
+    assert(!detector.is_active());
     WhistleBoundaryEvent ev;
     for (int i = 0; i < 12; ++i) {
         const auto pitch = estimatePitchFromMono(buf.data(), n, sr);
         detector.observe(detector.analyze(buf.data(), n, sr, 0.01 * static_cast<double>(i), pitch));
     }
+    assert(detector.is_active());
     assert(detector.try_pop_boundary(ev));
     assert(ev.active);
 
@@ -81,6 +83,7 @@ void boundary_state_machine_emits_on_off()
         silent.stream_time_seconds = 0.08 + 0.01 * static_cast<double>(k);
         detector.observe(silent);
     }
+    assert(!detector.is_active());
     assert(detector.try_pop_boundary(ev));
     assert(!ev.active);
 }

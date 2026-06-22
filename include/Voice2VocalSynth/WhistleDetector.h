@@ -61,6 +61,7 @@ public:
     /// Stateful wrapper that emits onset/end edges for logging and gating.
     void observe(const WhistleObservation& observation);
 
+    [[nodiscard]] bool is_active() const noexcept;
     [[nodiscard]] bool try_pop_boundary(WhistleBoundaryEvent& out);
 
     [[nodiscard]] static double goertzel_magnitude(const float* samples,

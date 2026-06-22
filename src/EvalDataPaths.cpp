@@ -2,6 +2,8 @@
 
 #include <cstdlib>
 #include <fstream>
+#include <algorithm>
+#include <vector>
 
 namespace Voice2VocalSynth
 {
@@ -78,6 +80,28 @@ bool ensureEvalDataReadme(const std::filesystem::path& root, std::string& error)
     output << "  - nasals M N NG\n";
     output << "  - R L W Y, nonsense syllables, whistle examples\n";
     return true;
+}
+
+std::vector<std::string> listEvalClipNames(const std::filesystem::path& evalRoot)
+{
+    std::vector<std::string> clips;
+    const auto layout = evalDataLayout(evalRoot);
+    if (!std::filesystem::is_directory(layout.recordings) || !std::filesystem::is_directory(layout.labels)) {
+        return clips;
+    }
+
+    for (const auto& entry : std::filesystem::directory_iterator(layout.recordings)) {
+        if (!entry.is_regular_file() || entry.path().extension() != ".wav") {
+            continue;
+        }
+        const auto clipName = entry.path().stem().string();
+        if (std::filesystem::exists(layout.labels / (clipName + ".json"))) {
+            clips.push_back(clipName);
+        }
+    }
+
+    std::sort(clips.begin(), clips.end());
+    return clips;
 }
 
 } // namespace Voice2VocalSynth
