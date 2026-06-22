@@ -1,0 +1,5 @@
+[
+  { "arpabet": "K", "start": 0.120, "end": 0.165, "confidence": 1.0, "isConsonant": true },
+  { "arpabet": "AE", "start": 0.165, "end": 0.410, "confidence": 1.0, "isVowel": true },
+  { "arpabet": "T", "start": 0.410, "end": 0.455, "confidence": 1.0, "isConsonant": true }
+]

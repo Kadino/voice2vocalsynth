@@ -24,6 +24,7 @@ string(REPLACE "\\" "/" _repo_root_slash "${_repo_root_slash}")
 add_library(Voice2VocalSynthCore
     src/AppSettings.cpp
     src/DebugTimeline.cpp
+    src/EvalDataPaths.cpp
     src/InferenceLatencyTracker.cpp
     src/LatencyBudget.cpp
     src/LoopbackLatencyMeasurer.cpp
@@ -32,6 +33,8 @@ add_library(Voice2VocalSynthCore
     src/PcmWavReader.cpp
     src/PcmWavWriter.cpp
     src/PhonemeBackend.cpp
+    src/PhonemeBakeoff.cpp
+    src/PhonemeBakeoffCli.cpp
     src/PhonemeEvalCli.cpp
     src/PhonemeEvaluation.cpp
     src/PhonemeOnnxAsyncRunner.cpp
@@ -44,6 +47,7 @@ add_library(Voice2VocalSynthCore
     src/PitchTarget.cpp
     src/RenderPlanner.cpp
     src/SimplePitchEstimator.cpp
+    src/StreamingLiveRenderer.cpp
     src/UtteranceSustainReleasePolicy.cpp
     src/VoiceActivityDetector.cpp
     src/WhistleDetector.cpp
@@ -94,6 +98,17 @@ add_executable(Voice2VocalSynthPhonemeEval
 target_link_libraries(Voice2VocalSynthPhonemeEval
     PRIVATE
         Voice2VocalSynthCore)
+
+add_executable(Voice2VocalSynthPhonemeBakeoff
+    apps/phoneme-bakeoff/main.cpp)
+
+target_link_libraries(Voice2VocalSynthPhonemeBakeoff
+    PRIVATE
+        Voice2VocalSynthCore)
+
+if(VOICE2VOCALSYNTH_ONNX_AVAILABLE)
+    voice2vocalsynth_copy_onnx_runtime_runtime_deps(Voice2VocalSynthPhonemeBakeoff)
+endif()
 
 if(VOICE2VOCALSYNTH_BUILD_TESTS)
     enable_testing()
@@ -167,6 +182,33 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
             "VOICE2VOCALSYNTH_REPOSITORY_ROOT=\"${_repo_root_slash}\"")
 
     add_test(NAME PhonemeEvalCliTests COMMAND PhonemeEvalCliTests)
+
+    add_executable(EvalDataPathsTests
+        tests/EvalDataPathsTests.cpp)
+
+    target_link_libraries(EvalDataPathsTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    add_test(NAME EvalDataPathsTests COMMAND EvalDataPathsTests)
+
+    add_executable(PhonemeBakeoffTests
+        tests/PhonemeBakeoffTests.cpp)
+
+    target_link_libraries(PhonemeBakeoffTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    add_test(NAME PhonemeBakeoffTests COMMAND PhonemeBakeoffTests)
+
+    add_executable(PhonemeBakeoffCliTests
+        tests/PhonemeBakeoffCliTests.cpp)
+
+    target_link_libraries(PhonemeBakeoffCliTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    add_test(NAME PhonemeBakeoffCliTests COMMAND PhonemeBakeoffCliTests)
 
     add_executable(PitchTargetTests
         tests/PitchTargetTests.cpp)

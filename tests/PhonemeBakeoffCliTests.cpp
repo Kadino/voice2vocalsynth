@@ -1,0 +1,37 @@
+#include <Voice2VocalSynth/PhonemeBakeoffCli.h>
+
+#include <cassert>
+#include <iostream>
+#include <string>
+
+namespace
+{
+using namespace Voice2VocalSynth;
+
+void parsesEvalDataClipArguments()
+{
+    std::string error;
+    const auto options = parsePhonemeBakeoffCliArgs(
+        {"Voice2VocalSynthPhonemeBakeoff",
+         "--eval-data",
+         "/tmp/EvalData",
+         "--clip",
+         "spoken_vowels",
+         "--backends",
+         "placeholder"},
+        error);
+    assert(options);
+    assert(options->evalDataRoot == "/tmp/EvalData");
+    assert(options->clipName == "spoken_vowels");
+    assert(options->referencePath == "/tmp/EvalData/labels/spoken_vowels.json");
+    assert(options->audioPath == "/tmp/EvalData/recordings/spoken_vowels.wav");
+}
+
+} // namespace
+
+int main()
+{
+    parsesEvalDataClipArguments();
+    std::cout << "PhonemeBakeoffCli tests passed\n";
+    return 0;
+}

@@ -25,10 +25,15 @@ struct PhonemeEvaluationMetrics
     std::size_t substitutionOrTimingErrorCount = 0;
     std::size_t missedCount = 0;
     std::size_t falsePositiveCount = 0;
+    std::size_t referenceConsonantCount = 0;
+    std::size_t missedConsonantCount = 0;
     double precision = 0.0;
     double recall = 0.0;
     double f1 = 0.0;
+    double falsePositiveRate = 0.0;
+    double missedConsonantRate = 0.0;
     double meanAbsoluteOnsetErrorMs = 0.0;
+    double p95OnsetErrorMs = 0.0;
 };
 
 [[nodiscard]] PhonemeEvaluationMetrics evaluatePhonemeFrames(
@@ -55,5 +60,9 @@ struct PhonemeFrameJsonLoadResult
 
 [[nodiscard]] std::string phonemeEvaluationMetricsToJson(
     const PhonemeEvaluationMetrics& metrics);
+
+[[nodiscard]] bool phonemeFrameIsConsonant(const PhonemeFrame& frame);
+
+[[nodiscard]] double percentileSeconds(const std::vector<double>& valuesSeconds, double quantile);
 
 } // namespace Voice2VocalSynth
