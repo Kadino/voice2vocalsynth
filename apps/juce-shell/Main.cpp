@@ -1,6 +1,10 @@
 #include <JuceHeader.h>
 
 #include "MainComponent.h"
+#include "Voice2VocalSynth/ShellCli.h"
+
+#include <optional>
+#include <vector>
 
 class Voice2VocalSynthApplication final : public juce::JUCEApplication
 {
@@ -22,8 +26,31 @@ public:
 
     void initialise(const juce::String& commandLineParameters) override
     {
-        juce::ignoreUnused(commandLineParameters);
-        mainWindow = std::make_unique<MainWindow>(getApplicationName());
+        std::optional<Voice2VocalSynth::ShellLiveLogExportPaths> liveLogExportPaths;
+        juce::StringArray tokens;
+        tokens.addTokens(commandLineParameters, true);
+        std::vector<std::string> args;
+        args.push_back("Voice2VocalSynthApp");
+        for (const auto& token : tokens) {
+            args.push_back(token.toStdString());
+        }
+
+        std::string error;
+        if (const auto options = Voice2VocalSynth::parseShellLiveLogExportArgs(args, error)) {
+            if (options->enabled) {
+                Voice2VocalSynth::ShellLiveLogExportPaths paths;
+                if (!Voice2VocalSynth::resolveShellLiveLogExportPaths(*options, paths, error)) {
+                    juce::Logger::writeToLog("Voice2VocalSynth: live log export setup failed: "
+                                             + juce::String(error));
+                } else {
+                    liveLogExportPaths = std::move(paths);
+                }
+            }
+        } else if (!error.empty()) {
+            juce::Logger::writeToLog("Voice2VocalSynth: " + juce::String(error));
+        }
+
+        mainWindow = std::make_unique<MainWindow>(getApplicationName(), std::move(liveLogExportPaths));
     }
 
     void shutdown() override
@@ -35,14 +62,15 @@ private:
     class MainWindow final : public juce::DocumentWindow
     {
     public:
-        explicit MainWindow(const juce::String& name)
+        explicit MainWindow(const juce::String& name,
+                            std::optional<Voice2VocalSynth::ShellLiveLogExportPaths> liveLogExportPaths)
             : DocumentWindow(name,
                              juce::Desktop::getInstance().getDefaultLookAndFeel().findColour(
                                  juce::ResizableWindow::backgroundColourId),
                              juce::DocumentWindow::minimiseButton | juce::DocumentWindow::closeButton)
         {
             setUsingNativeTitleBar(true);
-            setContentOwned(new MainComponent(), true);
+            setContentOwned(new MainComponent(std::move(liveLogExportPaths)), true);
             setResizable(true, true);
             setResizeLimits(420, 380, 10000, 10000);
             centreWithSize(getWidth(), getHeight());

@@ -14,6 +14,7 @@
 #include "Voice2VocalSynth/UtteranceSustainReleasePolicy.h"
 #include "Voice2VocalSynth/VoiceActivityDetector.h"
 #include "Voice2VocalSynth/WhistleDetector.h"
+#include "Voice2VocalSynth/ShellCli.h"
 
 #if defined(VOICE2VOCALSYNTH_WITH_ONNX)
 #include "Voice2VocalSynth/PhonemeOnnxAsyncRunner.h"
@@ -34,7 +35,8 @@ class MainComponent final : public juce::Component,
                             private juce::ChangeListener
 {
 public:
-    MainComponent();
+    explicit MainComponent(
+        std::optional<Voice2VocalSynth::ShellLiveLogExportPaths> liveLogExportPaths = std::nullopt);
     ~MainComponent() override;
 
     void paint(juce::Graphics& g) override;
@@ -64,6 +66,9 @@ private:
 
     void livePipelineTimerTick();
     void pushLiveLogLine(const std::string& line);
+    void initializeLiveLogExport();
+    void appendLiveLogExportLine(const std::string& line);
+    void logDeviceSettings(juce::AudioIODevice* device);
     void rebuildActivePhonemeBackend();
     [[nodiscard]] Voice2VocalSynth::IPhonemeBackend* activePhonemeBackend();
     void chooseLiveVoicebank();
@@ -131,6 +136,10 @@ private:
     int phonemeThrottleCounter_ = 0;
     std::deque<std::string> liveLogLines_;
     bool loopbackResultLogged_ = false;
+    std::optional<Voice2VocalSynth::ShellLiveLogExportPaths> liveLogExportPaths_;
+    std::unique_ptr<std::ofstream> liveLogFile_;
+    std::mutex liveLogFileMutex_;
+    bool liveLogExportReady_ = false;
 
 #if defined(VOICE2VOCALSYNTH_WITH_ONNX)
     std::unique_ptr<Voice2VocalSynth::PhonemeOnnxAsyncRunner> phonemeAsync_;
