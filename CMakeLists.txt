@@ -27,6 +27,7 @@ add_library(Voice2VocalSynthCore
     src/EvalDataPaths.cpp
     src/InferenceLatencyTracker.cpp
     src/LatencyBudget.cpp
+    src/LivePhonemeVerifyPaths.cpp
     src/LoopbackLatencyMeasurer.cpp
     src/OfflineRenderer.cpp
     src/PlaybackBoundaryMapper.cpp
@@ -47,6 +48,7 @@ add_library(Voice2VocalSynthCore
     src/PitchTarget.cpp
     src/RenderPlanner.cpp
     src/SimplePitchEstimator.cpp
+    src/ShellCli.cpp
     src/StreamingLiveRenderer.cpp
     src/UtteranceSustainReleasePolicy.cpp
     src/VoiceActivityDetector.cpp
@@ -191,6 +193,24 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
             Voice2VocalSynthCore)
 
     add_test(NAME EvalDataPathsTests COMMAND EvalDataPathsTests)
+
+    add_executable(LivePhonemeVerifyPathsTests
+        tests/LivePhonemeVerifyPathsTests.cpp)
+
+    target_link_libraries(LivePhonemeVerifyPathsTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    add_test(NAME LivePhonemeVerifyPathsTests COMMAND LivePhonemeVerifyPathsTests)
+
+    add_executable(ShellCliTests
+        tests/ShellCliTests.cpp)
+
+    target_link_libraries(ShellCliTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    add_test(NAME ShellCliTests COMMAND ShellCliTests)
 
     add_executable(PhonemeBakeoffTests
         tests/PhonemeBakeoffTests.cpp)

@@ -6,6 +6,7 @@
 #include "Voice2VocalSynth/RenderPlanner.h"
 #include "Voice2VocalSynth/SimplePitchEstimator.h"
 #include "Voice2VocalSynth/EvalDataPaths.h"
+#include "Voice2VocalSynth/LivePhonemeVerifyPaths.h"
 #include "Voice2VocalSynth/PhonemeMappingConfigLoader.h"
 #include "Voice2VocalSynth/DebugTimeline.h"
 #include "Voice2VocalSynth/AppSettings.h"
@@ -23,6 +24,7 @@
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <mutex>
 #include <sstream>
 #include <string>
@@ -118,7 +120,9 @@ std::string liveTimelineLogLine(const std::string& arpabet, const std::string& t
 
 } // namespace
 
-MainComponent::MainComponent()
+MainComponent::MainComponent(
+    std::optional<Voice2VocalSynth::ShellLiveLogExportPaths> liveLogExportPaths)
+    : liveLogExportPaths_(std::move(liveLogExportPaths))
 {
     titleLabel_.setText("Voice2VocalSynth — JUCE shell", juce::dontSendNotification);
     titleLabel_.setFont(juce::Font(juce::FontOptions(20.0f, juce::Font::bold)));
@@ -269,6 +273,7 @@ MainComponent::MainComponent()
     setSize(640, 860);
     startTimerHz(15);
     refreshLatencyDisplay();
+    initializeLiveLogExport();
 }
 
 MainComponent::~MainComponent()
@@ -440,6 +445,7 @@ void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* device)
     liveRenderer_.reset();
     if (device != nullptr) {
         liveSampleRateHz_ = device->getCurrentSampleRate();
+        logDeviceSettings(device);
     }
 
 #if defined(VOICE2VOCALSYNTH_WITH_ONNX)
@@ -619,6 +625,69 @@ void MainComponent::pushLiveLogLine(const std::string& line)
         text << juce::String(entry) << "\n";
     }
     livePipelineLog_.setText(text);
+    appendLiveLogExportLine(line);
+}
+
+void MainComponent::initializeLiveLogExport()
+{
+    if (!liveLogExportPaths_) {
+        return;
+    }
+
+    std::string error;
+    if (!writeLivePhonemeVerifyManifest(liveLogExportPaths_->runPaths, error)) {
+        juce::Logger::writeToLog("Voice2VocalSynth: manifest write failed: " + juce::String(error));
+        return;
+    }
+
+    liveLogFile_ = std::make_unique<std::ofstream>(liveLogExportPaths_->runPaths.liveLog,
+                                                   std::ios::binary | std::ios::app);
+    if (!liveLogFile_->is_open()) {
+        juce::Logger::writeToLog("Voice2VocalSynth: unable to open live log export: "
+                                 + juce::String(liveLogExportPaths_->runPaths.liveLog.string()));
+        liveLogFile_.reset();
+        return;
+    }
+
+    liveLogExportReady_ = true;
+    const char* backendName = activePhonemeBackend() ? activePhonemeBackend()->name() : "none";
+    std::ostringstream session;
+    session << "{\"kind\":\"session_start\",\"live_log_export\":true"
+            << ",\"run_directory\":\"" << liveLogExportPaths_->runPaths.runDirectory.string() << "\""
+            << ",\"manifest\":\"" << liveLogExportPaths_->runPaths.manifest.string() << "\""
+            << ",\"backend\":\"" << backendName << "\"}";
+    pushLiveLogLine(session.str());
+}
+
+void MainComponent::appendLiveLogExportLine(const std::string& line)
+{
+    if (!liveLogExportReady_ || liveLogFile_ == nullptr) {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(liveLogFileMutex_);
+    (*liveLogFile_) << line << '\n';
+    liveLogFile_->flush();
+}
+
+void MainComponent::logDeviceSettings(juce::AudioIODevice* device)
+{
+    if (device == nullptr) {
+        return;
+    }
+
+    const auto latency = deviceLatencyFromJuce(device);
+    std::ostringstream settings;
+    settings.setf(std::ios::fixed);
+    settings.precision(3);
+    settings << "{\"kind\":\"device_settings\""
+             << ",\"sample_rate_hz\":" << latency.sampleRateHz
+             << ",\"buffer_samples\":" << device->getCurrentBufferSizeSamples()
+             << ",\"input_latency_samples\":" << latency.inputDeviceLatencySamples
+             << ",\"output_latency_samples\":" << latency.outputDeviceLatencySamples
+             << ",\"input_buffer_samples\":" << latency.inputBufferSizeSamples
+             << ",\"output_buffer_samples\":" << latency.outputBufferSizeSamples << "}";
+    pushLiveLogLine(settings.str());
 }
 
 void MainComponent::livePipelineTimerTick()
@@ -772,9 +841,13 @@ void MainComponent::livePipelineTimerTick()
         cl.setf(std::ios::fixed);
         cl.precision(5);
         const char* backendName = activePhonemeBackend() ? activePhonemeBackend()->name() : "none";
+        const auto emissionSteadyNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                          std::chrono::steady_clock::now().time_since_epoch())
+                                          .count();
         cl << "{\"kind\":\"ph_frame\",\"backend\":\"" << backendName << "\",\"arpabet\":\"" << phFrame.arpabet
            << "\",\"conf\":" << phFrame.confidence << ",\"t0\":" << phFrame.estimatedOnsetSeconds
-           << ",\"t1\":" << phFrame.estimatedEndSeconds << ",\"vowel\":" << (phFrame.isVowel ? "true" : "false")
+           << ",\"t1\":" << phFrame.estimatedEndSeconds << ",\"steady_ns\":" << emissionSteadyNs
+           << ",\"vowel\":" << (phFrame.isVowel ? "true" : "false")
            << ",\"consonant\":" << (phFrame.isConsonant ? "true" : "false") << "}";
         pushLiveLogLine(cl.str());
     }
