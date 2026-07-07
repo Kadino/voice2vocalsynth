@@ -34,10 +34,11 @@ namespace
 std::string libriSpeechDatasetCliUsage()
 {
     return "Voice2VocalSynthLibriSpeechSetup "
-           "[--discover | --verify | --write-manifest] "
+           "[--discover | --verify | --write-manifest | --list-utterances] "
            "[--verify-root <LivePhonemeVerifyRoot>] "
            "[--dataset-root <LibriSpeechTestCleanRoot>] "
-           "[--manifest <manifest.json>]";
+           "[--manifest <manifest.json>] "
+           "[--limit <count>]";
 }
 
 std::optional<LibriSpeechDatasetCliOptions> parseLibriSpeechDatasetCliArgs(
@@ -65,6 +66,11 @@ std::optional<LibriSpeechDatasetCliOptions> parseLibriSpeechDatasetCliArgs(
             haveAction = true;
             continue;
         }
+        if (arg == "--list-utterances") {
+            options.action = LibriSpeechDatasetCliAction::ListUtterances;
+            haveAction = true;
+            continue;
+        }
         if (arg == "--verify-root") {
             if (index + 1 >= args.size()) {
                 error = "Missing value for --verify-root";
@@ -87,6 +93,14 @@ std::optional<LibriSpeechDatasetCliOptions> parseLibriSpeechDatasetCliArgs(
                 return std::nullopt;
             }
             options.manifestPathOverride = args[++index];
+            continue;
+        }
+        if (arg == "--limit") {
+            if (index + 1 >= args.size()) {
+                error = "Missing value for --limit";
+                return std::nullopt;
+            }
+            options.utteranceLimit = static_cast<std::size_t>(std::stoull(args[++index]));
             continue;
         }
         error = "Unknown argument: " + arg;
@@ -140,6 +154,18 @@ LibriSpeechDatasetCliResult runLibriSpeechDatasetCli(const LibriSpeechDatasetCli
     if (!validation.valid) {
         result.exitCode = LibriSpeechDatasetCliExitCode::RuntimeError;
         result.message = validation.error;
+        return result;
+    }
+
+    if (options.action == LibriSpeechDatasetCliAction::ListUtterances) {
+        const auto utterances = listLibriSpeechUtterances(*datasetRoot, options.utteranceLimit);
+        std::ostringstream message;
+        for (const auto& utterance : utterances) {
+            message << utterance.id << '\t' << utterance.flacPath.string() << '\t' << utterance.transcript
+                    << '\n';
+        }
+        result.exitCode = LibriSpeechDatasetCliExitCode::Success;
+        result.message = message.str();
         return result;
     }
 

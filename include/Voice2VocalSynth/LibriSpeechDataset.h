@@ -7,6 +7,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace Voice2VocalSynth
 {
@@ -15,6 +16,18 @@ inline constexpr std::string_view kLibriSpeechTestCleanArchiveUrl =
     "https://www.openslr.org/resources/12/test-clean.tar.gz";
 
 inline constexpr std::string_view kLibriSpeechTestCleanRelativePath = "LibriSpeech/test-clean";
+
+inline constexpr std::string_view kLibriSpeechLabelsRelativePath = "librispeech-test-clean";
+
+inline constexpr std::string_view kMfaEnglishUsArpaAcousticModel = "english_us_arpa";
+inline constexpr std::string_view kMfaEnglishUsArpaDictionary = "english_us_arpa";
+
+struct LibriSpeechUtterance
+{
+    std::string id;
+    std::filesystem::path flacPath;
+    std::string transcript;
+};
 
 struct LibriSpeechTestCleanSummary
 {
@@ -52,5 +65,17 @@ struct LibriSpeechTestCleanValidation
 [[nodiscard]] bool writeLibriSpeechDatasetManifest(const LibriSpeechTestCleanSummary& summary,
                                                    const std::filesystem::path& manifestPath,
                                                    std::string& error);
+
+/// Canonical labels root, e.g. `.../labels/librispeech-test-clean/`.
+[[nodiscard]] std::filesystem::path defaultLibriSpeechLabelsRoot(
+    const std::filesystem::path& verifyRoot = defaultLivePhonemeVerifyRoot());
+
+[[nodiscard]] std::filesystem::path defaultLibriSpeechLabelManifestPath(
+    const std::filesystem::path& verifyRoot = defaultLivePhonemeVerifyRoot());
+
+/// Lists utterances sorted by id. `maxCount == 0` returns all utterances.
+[[nodiscard]] std::vector<LibriSpeechUtterance> listLibriSpeechUtterances(
+    const std::filesystem::path& datasetRoot,
+    std::size_t maxCount = 0);
 
 } // namespace Voice2VocalSynth

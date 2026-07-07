@@ -30,6 +30,8 @@ add_library(Voice2VocalSynthCore
     src/LivePhonemeVerifyPaths.cpp
     src/LibriSpeechDataset.cpp
     src/LibriSpeechDatasetCli.cpp
+    src/MfaLabelCli.cpp
+    src/MfaLabelPipeline.cpp
     src/LoopbackLatencyMeasurer.cpp
     src/OfflineRenderer.cpp
     src/PlaybackBoundaryMapper.cpp
@@ -107,6 +109,13 @@ add_executable(Voice2VocalSynthLibriSpeechSetup
     apps/librispeech-setup/main.cpp)
 
 target_link_libraries(Voice2VocalSynthLibriSpeechSetup
+    PRIVATE
+        Voice2VocalSynthCore)
+
+add_executable(Voice2VocalSynthMfaLabelConvert
+    apps/mfa-label-convert/main.cpp)
+
+target_link_libraries(Voice2VocalSynthMfaLabelConvert
     PRIVATE
         Voice2VocalSynthCore)
 
@@ -229,6 +238,19 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
             Voice2VocalSynthCore)
 
     add_test(NAME LibriSpeechDatasetTests COMMAND LibriSpeechDatasetTests)
+
+    add_executable(MfaLabelPipelineTests
+        tests/MfaLabelPipelineTests.cpp)
+
+    target_link_libraries(MfaLabelPipelineTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    target_compile_definitions(MfaLabelPipelineTests
+        PRIVATE
+            "VOICE2VOCALSYNTH_REPOSITORY_ROOT=\"${_repo_root_slash}\"")
+
+    add_test(NAME MfaLabelPipelineTests COMMAND MfaLabelPipelineTests)
 
     add_executable(PhonemeBakeoffTests
         tests/PhonemeBakeoffTests.cpp)

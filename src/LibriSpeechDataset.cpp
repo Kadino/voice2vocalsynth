@@ -6,6 +6,7 @@
 #include <set>
 #include <sstream>
 #include <vector>
+#include <algorithm>
 
 namespace Voice2VocalSynth
 {
@@ -215,6 +216,73 @@ bool writeLibriSpeechDatasetManifest(const LibriSpeechTestCleanSummary& summary,
     json << "}\n";
     output << json.str();
     return static_cast<bool>(output);
+}
+
+std::filesystem::path defaultLibriSpeechLabelsRoot(const std::filesystem::path& verifyRoot)
+{
+    const auto layout = livePhonemeVerifyLayout(verifyRoot);
+    return layout.labels / kLibriSpeechLabelsRelativePath;
+}
+
+std::filesystem::path defaultLibriSpeechLabelManifestPath(const std::filesystem::path& verifyRoot)
+{
+    return defaultLibriSpeechLabelsRoot(verifyRoot) / "manifest.json";
+}
+
+std::vector<LibriSpeechUtterance> listLibriSpeechUtterances(const std::filesystem::path& datasetRoot,
+                                                            const std::size_t maxCount)
+{
+    std::vector<LibriSpeechUtterance> utterances;
+    std::error_code ec;
+
+    for (const auto& speakerEntry : std::filesystem::directory_iterator(datasetRoot, ec)) {
+        if (ec || !speakerEntry.is_directory() || !isNumericSpeakerId(speakerEntry.path().filename())) {
+            continue;
+        }
+
+        for (const auto& chapterEntry : std::filesystem::directory_iterator(speakerEntry.path(), ec)) {
+            if (ec || !chapterEntry.is_directory()) {
+                continue;
+            }
+
+            for (const auto& fileEntry : std::filesystem::directory_iterator(chapterEntry.path(), ec)) {
+                if (ec || !fileEntry.is_regular_file()) {
+                    continue;
+                }
+                if (fileEntry.path().filename().string().ends_with(".trans.txt")) {
+                    std::ifstream transcriptFile(fileEntry.path());
+                    std::string line;
+                    while (std::getline(transcriptFile, line)) {
+                        if (line.empty()) {
+                            continue;
+                        }
+                        const auto space = line.find(' ');
+                        if (space == std::string::npos) {
+                            continue;
+                        }
+                        LibriSpeechUtterance utterance;
+                        utterance.id = line.substr(0, space);
+                        utterance.transcript = line.substr(space + 1);
+                        utterance.flacPath = chapterEntry.path() / (utterance.id + ".flac");
+                        if (std::filesystem::exists(utterance.flacPath)) {
+                            utterances.push_back(std::move(utterance));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    std::sort(utterances.begin(),
+              utterances.end(),
+              [](const LibriSpeechUtterance& left, const LibriSpeechUtterance& right) {
+                  return left.id < right.id;
+              });
+
+    if (maxCount > 0 && utterances.size() > maxCount) {
+        utterances.resize(maxCount);
+    }
+    return utterances;
 }
 
 } // namespace Voice2VocalSynth

@@ -22,6 +22,7 @@ enum class LibriSpeechDatasetCliAction
     Discover,
     Verify,
     WriteManifest,
+    ListUtterances,
 };
 
 struct LibriSpeechDatasetCliOptions
@@ -30,6 +31,7 @@ struct LibriSpeechDatasetCliOptions
     std::filesystem::path verifyRoot = defaultLivePhonemeVerifyRoot();
     std::optional<std::filesystem::path> datasetRootOverride;
     std::optional<std::filesystem::path> manifestPathOverride;
+    std::size_t utteranceLimit = 0;
 };
 
 [[nodiscard]] std::string libriSpeechDatasetCliUsage();
