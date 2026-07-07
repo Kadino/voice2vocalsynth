@@ -5,7 +5,7 @@ voice-to-UTAU vocal synthesis experiments.
 
 ## Canonical project specification (agent-parseable)
 
-See [`voice2vocalsynth.spec.md`](voice2vocalsynth.spec.md). The **YAML frontmatter** in that file is the canonical, machine-parseable source of truth for project direction, pipeline, latency modes, detection design, and renderer plans. For the **live pipeline implementation roadmap** (milestones, gaps, next steps, and the executable backend-bakeoff → live-synthesis handoff plan), see [`docs/live-pipeline-roadmap.md`](docs/live-pipeline-roadmap.md).
+See [`voice2vocalsynth.spec.md`](voice2vocalsynth.spec.md). The **YAML frontmatter** in that file is the canonical, machine-parseable source of truth for project direction, pipeline, latency modes, detection design, and renderer plans. For the **live pipeline implementation roadmap** (milestones, gaps, next steps, and the executable backend-bakeoff → live-synthesis handoff plan), see [`docs/live-pipeline-roadmap.md`](docs/live-pipeline-roadmap.md). For the Linux-first, near real time phoneme verification handoff plan, see [`docs/live-phoneme-verification-plan.md`](docs/live-phoneme-verification-plan.md).
 
 ## Current core module
 

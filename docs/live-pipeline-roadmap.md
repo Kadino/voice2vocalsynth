@@ -1,6 +1,6 @@
 # Live pipeline roadmap (agent / future sessions)
 
-This document captures the **gap analysis and prioritized plan** agreed for Voice2VocalSynth so future work sessions can continue without re-deriving scope from chat history. The canonical product spec remains [`voice2vocalsynth.spec.md`](../voice2vocalsynth.spec.md).
+This document captures the **gap analysis and prioritized plan** agreed for Voice2VocalSynth so future work sessions can continue without re-deriving scope from chat history. The canonical product spec remains [`voice2vocalsynth.spec.md`](../voice2vocalsynth.spec.md). For the Linux-first, near real time development verification plan for phoneme detection, see [`live-phoneme-verification-plan.md`](live-phoneme-verification-plan.md).
 
 ## Implementation status legend
 
