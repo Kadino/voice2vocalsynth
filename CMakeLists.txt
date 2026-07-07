@@ -28,6 +28,8 @@ add_library(Voice2VocalSynthCore
     src/InferenceLatencyTracker.cpp
     src/LatencyBudget.cpp
     src/LivePhonemeVerifyPaths.cpp
+    src/LibriSpeechDataset.cpp
+    src/LibriSpeechDatasetCli.cpp
     src/LoopbackLatencyMeasurer.cpp
     src/OfflineRenderer.cpp
     src/PlaybackBoundaryMapper.cpp
@@ -98,6 +100,13 @@ add_executable(Voice2VocalSynthPhonemeEval
     apps/phoneme-eval/main.cpp)
 
 target_link_libraries(Voice2VocalSynthPhonemeEval
+    PRIVATE
+        Voice2VocalSynthCore)
+
+add_executable(Voice2VocalSynthLibriSpeechSetup
+    apps/librispeech-setup/main.cpp)
+
+target_link_libraries(Voice2VocalSynthLibriSpeechSetup
     PRIVATE
         Voice2VocalSynthCore)
 
@@ -211,6 +220,15 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
             Voice2VocalSynthCore)
 
     add_test(NAME ShellCliTests COMMAND ShellCliTests)
+
+    add_executable(LibriSpeechDatasetTests
+        tests/LibriSpeechDatasetTests.cpp)
+
+    target_link_libraries(LibriSpeechDatasetTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    add_test(NAME LibriSpeechDatasetTests COMMAND LibriSpeechDatasetTests)
 
     add_executable(PhonemeBakeoffTests
         tests/PhonemeBakeoffTests.cpp)
