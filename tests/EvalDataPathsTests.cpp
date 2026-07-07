@@ -3,6 +3,7 @@
 #include <cassert>
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 
 namespace
@@ -32,11 +33,31 @@ void createsEvalDataLayout()
     std::filesystem::remove_all(root);
 }
 
+void listsClipsWithMatchingLabels()
+{
+    const auto root = tempEvalRoot();
+    std::string error;
+    assert(ensureEvalDataLayout(root, error));
+
+    const auto layout = evalDataLayout(root);
+    std::ofstream(layout.recordings / "alpha.wav").put(' ');
+    std::ofstream(layout.labels / "alpha.json") << "[]\n";
+    std::ofstream(layout.recordings / "orphan.wav").put(' ');
+    std::ofstream(layout.labels / "beta.json") << "[]\n";
+
+    const auto clips = listEvalClipNames(root);
+    assert(clips.size() == 1);
+    assert(clips.front() == "alpha");
+
+    std::filesystem::remove_all(root);
+}
+
 } // namespace
 
 int main()
 {
     createsEvalDataLayout();
+    listsClipsWithMatchingLabels();
     std::cout << "EvalDataPaths tests passed\n";
     return 0;
 }

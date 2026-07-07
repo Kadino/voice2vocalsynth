@@ -24,6 +24,7 @@
 #include <deque>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -66,6 +67,8 @@ private:
     void rebuildActivePhonemeBackend();
     [[nodiscard]] Voice2VocalSynth::IPhonemeBackend* activePhonemeBackend();
     void chooseLiveVoicebank();
+    void configureLiveRenderer();
+    [[nodiscard]] std::optional<std::filesystem::path> shellPhonemeMappingPath() const;
 
     void offlineRenderTest();
     void runOfflineRenderToFile(const juce::File& voicebankDirectory, const juce::File& outputWavFile);
@@ -120,6 +123,10 @@ private:
     std::atomic<std::uint64_t> livePlaybackSamples_{0};
     juce::String liveVoicebankPath_;
     juce::String evalDataFolderPath_;
+    juce::String phonemeMappingPath_;
+    juce::String phonemeOnnxModelPath_;
+    juce::String phonemeOnnxConfigPath_;
+    bool phonemeOnnxUseRepositoryFixture_ = true;
     bool whistleModeActive_ = false;
     int phonemeThrottleCounter_ = 0;
     std::deque<std::string> liveLogLines_;

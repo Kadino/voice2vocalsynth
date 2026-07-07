@@ -6,6 +6,7 @@
 #include <cctype>
 #include <fstream>
 #include <memory>
+#include <optional>
 #include <sstream>
 
 namespace Voice2VocalSynth
@@ -87,6 +88,107 @@ void appendBackend(std::vector<std::unique_ptr<IPhonemeBackend>>& backends,
     error = "Unknown backend: " + name;
 }
 
+[[nodiscard]] std::optional<PhonemeBakeoffReport> runBakeoffReportForClip(
+    const PhonemeBakeoffCliOptions& options,
+    const std::filesystem::path& referencePath,
+    const std::filesystem::path& audioPath,
+    std::string& error)
+{
+    const auto reference = loadPhonemeFrameLabelsJson(referencePath);
+    if (!reference.ok) {
+        error = reference.error;
+        return std::nullopt;
+    }
+
+    const auto audio = PcmWavReader::loadMonoFloat(audioPath);
+    if (!audio.ok) {
+        error = audio.error;
+        return std::nullopt;
+    }
+
+    std::vector<std::unique_ptr<IPhonemeBackend>> ownedBackends;
+    std::vector<IPhonemeBackend*> backendPtrs;
+    for (const auto& backendName : options.backendNames) {
+        appendBackend(ownedBackends, backendName, options, error);
+        if (!error.empty()) {
+            return std::nullopt;
+        }
+        backendPtrs.push_back(ownedBackends.back().get());
+    }
+
+    return runPhonemeBakeoff(reference.frames,
+                             backendPtrs,
+                             audio.mono,
+                             static_cast<double>(audio.sampleRate),
+                             options.evalOptions);
+}
+
+[[nodiscard]] std::string phonemeBakeoffBatchReportToJson(
+    const std::vector<std::pair<std::string, PhonemeBakeoffReport>>& clipReports)
+{
+    std::ostringstream json;
+    json << std::fixed;
+    json.precision(6);
+    json << "{\n  \"schemaVersion\": 1,\n  \"clips\": [\n";
+    for (std::size_t clipIndex = 0; clipIndex < clipReports.size(); ++clipIndex) {
+        const auto& [clipName, report] = clipReports[clipIndex];
+        json << "    {\n";
+        json << "      \"clip\": \"" << clipName << "\",\n";
+        json << "      \"entries\": [\n";
+        for (std::size_t index = 0; index < report.entries.size(); ++index) {
+            const auto& entry = report.entries[index];
+            json << "        {\n";
+            json << "          \"backendName\": \"" << entry.backendName << "\",\n";
+            json << "          \"meanBackendLatencyMs\": " << entry.meanBackendLatencyMs << ",\n";
+            json << "          \"p95BackendLatencyMs\": " << entry.p95BackendLatencyMs << ",\n";
+            json << "          \"stabilizedF1\": " << entry.stabilizedMetrics.f1 << ",\n";
+            json << "          \"stabilizedP95OnsetErrorMs\": " << entry.stabilizedMetrics.p95OnsetErrorMs
+                 << "\n";
+            json << "        }";
+            if (index + 1 < report.entries.size()) {
+                json << ',';
+            }
+            json << '\n';
+        }
+        json << "      ]\n";
+        json << "    }";
+        if (clipIndex + 1 < clipReports.size()) {
+            json << ',';
+        }
+        json << '\n';
+    }
+    json << "  ]\n}\n";
+    return json.str();
+}
+
+PhonemeBakeoffCliResult runSingleClipBakeoff(const PhonemeBakeoffCliOptions& options,
+                                             const std::filesystem::path& referencePath,
+                                             const std::filesystem::path& audioPath)
+{
+    PhonemeBakeoffCliResult result;
+    std::string error;
+    const auto report = runBakeoffReportForClip(options, referencePath, audioPath, error);
+    if (!report) {
+        result.summary = error;
+        return result;
+    }
+
+    result.reportJson = phonemeBakeoffReportToJson(*report);
+    std::ostringstream summary;
+    for (const auto& entry : report->entries) {
+        summary << entry.backendName << " raw_f1=" << entry.rawMetrics.f1
+                << " stabilized_f1=" << entry.stabilizedMetrics.f1
+                << " p95_onset_ms=" << entry.stabilizedMetrics.p95OnsetErrorMs
+                << " p95_latency_ms=" << entry.p95BackendLatencyMs << '\n';
+    }
+    result.summary = summary.str();
+    if (result.summary.empty()) {
+        result.summary = "No backends evaluated";
+    }
+    result.exitCode = PhonemeBakeoffCliExitCode::Success;
+    return result;
+}
+
 } // namespace
 
 std::string phonemeBakeoffCliUsage()
@@ -94,7 +196,7 @@ std::string phonemeBakeoffCliUsage()
     return "Voice2VocalSynthPhonemeBakeoff "
            "--reference <labels.json> --audio <clip.wav> "
            "[--backends placeholder,onnx] "
-           "[--eval-data <EvalDataRoot> --clip <basename>] "
+           "[--eval-data <EvalDataRoot> --clip <basename> | --all-clips] "
            "[--onnx-model <model.onnx> --onnx-config <model.phoneme.json>] "
            "[--out <report.json>] "
            "[--max-onset-error-ms <ms>] [--min-overlap-ms <ms>]";
@@ -143,6 +245,10 @@ std::optional<PhonemeBakeoffCliOptions> parsePhonemeBakeoffCliArgs(
                 return std::nullopt;
             }
             options.clipName = args[++index];
+            continue;
+        }
+        if (arg == "--all-clips") {
+            options.allClips = true;
             continue;
         }
         if (arg == "--backends") {
@@ -213,6 +319,14 @@ std::optional<PhonemeBakeoffCliOptions> parsePhonemeBakeoffCliArgs(
         return std::nullopt;
     }
 
+    if (options.allClips) {
+        if (!options.evalDataRoot) {
+            error = "--all-clips requires --eval-data";
+            return std::nullopt;
+        }
+        return options;
+    }
+
     if (options.evalDataRoot && options.clipName) {
         const auto layout = evalDataLayout(*options.evalDataRoot);
         if (!haveReference) {
@@ -226,7 +340,7 @@ std::optional<PhonemeBakeoffCliOptions> parsePhonemeBakeoffCliArgs(
     }
 
     if (!haveReference || !haveAudio) {
-        error = "Both --reference and --audio are required unless --eval-data and --clip are provided";
+        error = "Provide --reference and --audio, or --eval-data with --clip, or --eval-data with --all-clips";
         return std::nullopt;
     }
 
@@ -244,60 +358,69 @@ PhonemeBakeoffCliResult runPhonemeBakeoffCli(const PhonemeBakeoffCliOptions& opt
         }
     }
 
-    const auto reference = loadPhonemeFrameLabelsJson(options.referencePath);
-    if (!reference.ok) {
-        result.summary = reference.error;
-        return result;
-    }
-
-    const auto audio = PcmWavReader::loadMonoFloat(options.audioPath);
-    if (!audio.ok) {
-        result.summary = audio.error;
-        return result;
-    }
-
-    std::vector<std::unique_ptr<IPhonemeBackend>> ownedBackends;
-    std::vector<IPhonemeBackend*> backendPtrs;
-    std::string backendError;
-    for (const auto& backendName : options.backendNames) {
-        appendBackend(ownedBackends, backendName, options, backendError);
-        if (!backendError.empty()) {
-            result.summary = backendError;
+    if (options.allClips) {
+        if (!options.evalDataRoot) {
+            result.summary = "--all-clips requires --eval-data";
             return result;
         }
-        backendPtrs.push_back(ownedBackends.back().get());
+
+        const auto clips = listEvalClipNames(*options.evalDataRoot);
+        if (clips.empty()) {
+            result.summary = "No eval clips with matching recordings/ and labels/ pairs were found";
+            return result;
+        }
+
+        const auto layout = evalDataLayout(*options.evalDataRoot);
+        std::vector<std::pair<std::string, PhonemeBakeoffReport>> clipReports;
+        std::ostringstream summary;
+        for (const auto& clip : clips) {
+            const auto referencePath = layout.labels / (clip + ".json");
+            const auto audioPath = layout.recordings / (clip + ".wav");
+            std::string clipError;
+            const auto report = runBakeoffReportForClip(options, referencePath, audioPath, clipError);
+            if (!report) {
+                result.summary = "Clip " + clip + " failed: " + clipError;
+                return result;
+            }
+
+            clipReports.emplace_back(clip, *report);
+            summary << clip << ": ";
+            for (const auto& entry : report->entries) {
+                summary << entry.backendName << " f1=" << entry.stabilizedMetrics.f1 << ' ';
+            }
+            summary << '\n';
+        }
+
+        result.reportJson = phonemeBakeoffBatchReportToJson(clipReports);
+        result.summary = summary.str();
+        if (options.outputPath) {
+            std::ofstream output(*options.outputPath, std::ios::binary);
+            if (!output) {
+                result.summary = "Unable to write bakeoff report: " + options.outputPath->string();
+                return result;
+            }
+            output << *result.reportJson;
+        }
+        result.exitCode = PhonemeBakeoffCliExitCode::Success;
+        return result;
     }
 
-    const auto report = runPhonemeBakeoff(reference.frames,
-                                          backendPtrs,
-                                          audio.mono,
-                                          static_cast<double>(audio.sampleRate),
-                                          options.evalOptions);
-    result.reportJson = phonemeBakeoffReportToJson(report);
-
-    std::ostringstream summary;
-    for (const auto& entry : report.entries) {
-        summary << entry.backendName << " raw_f1=" << entry.rawMetrics.f1
-                << " stabilized_f1=" << entry.stabilizedMetrics.f1
-                << " p95_onset_ms=" << entry.stabilizedMetrics.p95OnsetErrorMs
-                << " p95_latency_ms=" << entry.p95BackendLatencyMs << '\n';
-    }
-    result.summary = summary.str();
-    if (result.summary.empty()) {
-        result.summary = "No backends evaluated";
+    auto singleResult = runSingleClipBakeoff(options, options.referencePath, options.audioPath);
+    if (singleResult.exitCode != PhonemeBakeoffCliExitCode::Success) {
+        return singleResult;
     }
 
-    if (options.outputPath) {
+    if (options.outputPath && singleResult.reportJson) {
         std::ofstream output(*options.outputPath, std::ios::binary);
         if (!output) {
-            result.summary = "Unable to write bakeoff report: " + options.outputPath->string();
-            return result;
+            singleResult.summary = "Unable to write bakeoff report: " + options.outputPath->string();
+            singleResult.exitCode = PhonemeBakeoffCliExitCode::RuntimeError;
+            return singleResult;
         }
-        output << *result.reportJson;
+        output << *singleResult.reportJson;
     }
 
-    result.exitCode = PhonemeBakeoffCliExitCode::Success;
-    return result;
+    return singleResult;
 }
 
 } // namespace Voice2VocalSynth

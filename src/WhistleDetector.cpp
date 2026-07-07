@@ -161,6 +161,11 @@ bool WhistleDetector::try_pop_boundary(WhistleBoundaryEvent& out)
     return true;
 }
 
+bool WhistleDetector::is_active() const noexcept
+{
+    return active_;
+}
+
 void WhistleDetector::observe(const WhistleObservation& observation)
 {
     if (observation.is_whistle) {

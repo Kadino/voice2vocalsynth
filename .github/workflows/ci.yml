@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  core-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ libstdc++-13-dev
+
+      - name: Configure, build, and test
+        run: |
+          CXX=g++ cmake -S . -B build -DVOICE2VOCALSYNTH_BUILD_JUCE_APP=OFF
+          cmake --build build -j"$(nproc)"
+          ctest --test-dir build --output-on-failure
+
+  juce-linux-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install JUCE Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake g++ libstdc++-13-dev pkg-config \
+            libgtk-3-dev libwebkit2gtk-4.1-dev libcurl4-openssl-dev \
+            libasound2-dev libx11-dev libxrandr-dev libxinerama-dev \
+            libxcursor-dev libfreetype-dev libgl1-mesa-dev
+
+      - name: Build JUCE shell (compile smoke)
+        run: |
+          CXX=g++ cmake -S . -B build -DVOICE2VOCALSYNTH_BUILD_JUCE_APP=ON
+          cmake --build build --target Voice2VocalSynthApp -j"$(nproc)"

@@ -25,13 +25,21 @@ const std::vector<std::string>& StreamingLiveRenderer::warnings() const noexcept
     return warnings_;
 }
 
-bool StreamingLiveRenderer::configure(const std::filesystem::path& voicebankRoot, std::string& error)
+const std::optional<DebugTimeline>& StreamingLiveRenderer::lastTimeline() const noexcept
+{
+    return lastTimeline_;
+}
+
+bool StreamingLiveRenderer::configure(const std::filesystem::path& voicebankRoot,
+                                        const std::optional<std::filesystem::path>& phonemeMappingPath,
+                                        std::string& error)
 {
     error.clear();
     warnings_.clear();
     reset();
 
     options_.voicebankRoot = voicebankRoot;
+    options_.phonemeMappingPath = phonemeMappingPath;
     scan_ = VoicebankScanner::scan(voicebankRoot);
     if (!scan_.foundOtoIni()) {
         error = "No oto.ini found under voicebank root: " + voicebankRoot.string();
@@ -53,10 +61,27 @@ void StreamingLiveRenderer::reset()
 {
     scheduled_.clear();
     lastScheduledPhoneme_.clear();
+    sustainReleasePlaybackSeconds_.reset();
+    lastTimeline_.reset();
+}
+
+void StreamingLiveRenderer::onUtteranceStart()
+{
+    lastScheduledPhoneme_.clear();
+    sustainReleasePlaybackSeconds_.reset();
+}
+
+void StreamingLiveRenderer::onSustainRelease(const double playbackTimeSeconds)
+{
+    sustainReleasePlaybackSeconds_ = playbackTimeSeconds;
 }
 
 void StreamingLiveRenderer::scheduleRenderedEvent(const RenderEvent& event,
-                                                    const double playbackScheduleSeconds)
+                                                    const VoicebankMappingPlan& mapping,
+                                                    const RenderPlan& renderPlan,
+                                                    const PitchTarget& pitchTarget,
+                                                    const double playbackScheduleSeconds,
+                                                    const double estimatedLatencyMs)
 {
     RenderPlan plan;
     plan.events.push_back(event);
@@ -77,11 +102,13 @@ void StreamingLiveRenderer::scheduleRenderedEvent(const RenderEvent& event,
     chunk.playbackStartSeconds = playbackScheduleSeconds;
     chunk.samples = std::move(rendered.mono);
     scheduled_.push_back(std::move(chunk));
+    lastTimeline_ = DebugTimelineExporter::fromPlans(mapping, renderPlan, pitchTarget, estimatedLatencyMs);
 }
 
 void StreamingLiveRenderer::onCommittedPhoneme(const PhonemeFrame& frame,
                                                  const PitchTarget& pitchTarget,
-                                                 const double playbackScheduleSeconds)
+                                                 const double playbackScheduleSeconds,
+                                                 const double estimatedLatencyMs)
 {
     if (!configured_ || planner_ == nullptr || frame.arpabet.empty()) {
         return;
@@ -113,8 +140,12 @@ void StreamingLiveRenderer::onCommittedPhoneme(const PhonemeFrame& frame,
     }
 
     auto event = renderPlan.events.front();
-    event.perceivedUtteranceEndSeconds = playbackScheduleSeconds + (event.durationMs / 1000.0);
-    scheduleRenderedEvent(event, playbackScheduleSeconds);
+    if (sustainReleasePlaybackSeconds_) {
+        event.perceivedUtteranceEndSeconds = *sustainReleasePlaybackSeconds_;
+    } else {
+        event.perceivedUtteranceEndSeconds = playbackScheduleSeconds + (event.durationMs / 1000.0);
+    }
+    scheduleRenderedEvent(event, mapping, renderPlan, pitchTarget, playbackScheduleSeconds, estimatedLatencyMs);
     lastScheduledPhoneme_ = frame.arpabet;
 }
 
@@ -129,6 +160,7 @@ void StreamingLiveRenderer::renderBlock(float* output,
 
     std::fill(output, output + numSamples, 0.0F);
     const double blockDuration = static_cast<double>(numSamples) / sampleRateHz;
+    const double blockEnd = playbackStartSeconds + blockDuration;
 
     while (!scheduled_.empty()) {
         const auto& front = scheduled_.front();
@@ -143,10 +175,10 @@ void StreamingLiveRenderer::renderBlock(float* output,
 
     for (const auto& chunk : scheduled_) {
         const double chunkStart = chunk.playbackStartSeconds;
-        const double chunkDuration =
-            static_cast<double>(chunk.samples.size()) / sampleRateHz;
-        const double chunkEnd = chunkStart + chunkDuration;
-        const double blockEnd = playbackStartSeconds + blockDuration;
+        double chunkEnd = chunkStart + (static_cast<double>(chunk.samples.size()) / sampleRateHz);
+        if (sustainReleasePlaybackSeconds_) {
+            chunkEnd = std::min(chunkEnd, *sustainReleasePlaybackSeconds_);
+        }
         if (chunkEnd <= playbackStartSeconds || chunkStart >= blockEnd) {
             continue;
         }
