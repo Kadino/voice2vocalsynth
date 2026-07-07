@@ -3,8 +3,26 @@ name: CI
 on:
   push:
     branches: [main]
+    paths:
+      - "apps/**"
+      - "cmake/**"
+      - "config/**"
+      - "include/**"
+      - "scripts/**"
+      - "src/**"
+      - "tests/**"
+      - "CMakeLists.txt"
   pull_request:
     branches: [main]
+    paths:
+      - "apps/**"
+      - "cmake/**"
+      - "config/**"
+      - "include/**"
+      - "scripts/**"
+      - "src/**"
+      - "tests/**"
+      - "CMakeLists.txt"
 
 jobs:
   core-tests:
