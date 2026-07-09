@@ -30,6 +30,8 @@ add_library(Voice2VocalSynthCore
     src/LivePhonemeVerifyPaths.cpp
     src/LibriSpeechDataset.cpp
     src/LibriSpeechDatasetCli.cpp
+    src/LinuxVirtualAudio.cpp
+    src/LinuxVirtualAudioCli.cpp
     src/MfaLabelCli.cpp
     src/MfaLabelPipeline.cpp
     src/LoopbackLatencyMeasurer.cpp
@@ -116,6 +118,13 @@ add_executable(Voice2VocalSynthMfaLabelConvert
     apps/mfa-label-convert/main.cpp)
 
 target_link_libraries(Voice2VocalSynthMfaLabelConvert
+    PRIVATE
+        Voice2VocalSynthCore)
+
+add_executable(Voice2VocalSynthLinuxAudioValidate
+    apps/linux-audio-validate/main.cpp)
+
+target_link_libraries(Voice2VocalSynthLinuxAudioValidate
     PRIVATE
         Voice2VocalSynthCore)
 
@@ -251,6 +260,19 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
             "VOICE2VOCALSYNTH_REPOSITORY_ROOT=\"${_repo_root_slash}\"")
 
     add_test(NAME MfaLabelPipelineTests COMMAND MfaLabelPipelineTests)
+
+    add_executable(LinuxVirtualAudioTests
+        tests/LinuxVirtualAudioTests.cpp)
+
+    target_link_libraries(LinuxVirtualAudioTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    target_compile_definitions(LinuxVirtualAudioTests
+        PRIVATE
+            "VOICE2VOCALSYNTH_REPOSITORY_ROOT=\"${_repo_root_slash}\"")
+
+    add_test(NAME LinuxVirtualAudioTests COMMAND LinuxVirtualAudioTests)
 
     add_executable(PhonemeBakeoffTests
         tests/PhonemeBakeoffTests.cpp)

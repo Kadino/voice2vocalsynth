@@ -1,0 +1,2 @@
+Server Name: PulseAudio (on PipeWire 1.0.5)
+Server Version: 15.0.0

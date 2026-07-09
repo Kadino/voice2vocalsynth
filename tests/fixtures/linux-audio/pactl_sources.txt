@@ -1,0 +1,8 @@
+Source #70
+	State: RUNNING
+	Name: LivePhonemeVerify.monitor
+	Description: Monitor of LivePhonemeVerify
+Source #71
+	State: SUSPENDED
+	Name: alsa_input.pci-0000_00_1f.3.analog-stereo
+	Description: Built-in Audio Analog Stereo
