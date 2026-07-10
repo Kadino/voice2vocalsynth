@@ -54,7 +54,10 @@ void parsesSampleTextGrid()
 
     const auto reload = parsePhonemeFrameLabelsJson(phonemeFramesToLabelJson(parsed.frames));
     assert(reload.ok);
-    assert(reload.frames.size() == 2);
+    assert(reload.frames.size() == 3);
+    assert(reload.frames[0].arpabet == "K");
+    assert(reload.frames[1].arpabet == "AE");
+    assert(reload.frames[2].arpabet == "T");
 }
 
 void convertsTextGridTree()
@@ -84,9 +87,11 @@ void listsUtterances()
     std::filesystem::create_directories(chapter);
     std::ofstream(chapter / "1089-134686-0000.flac", std::ios::binary).put('\0');
     std::ofstream(chapter / "1089-134686-0001.flac", std::ios::binary).put('\0');
-    std::ofstream transcript(chapter / "1089-134686.trans.txt");
-    transcript << "1089-134686-0001 SECOND\n"
-               << "1089-134686-0000 FIRST\n";
+    {
+        std::ofstream transcript(chapter / "1089-134686.trans.txt");
+        transcript << "1089-134686-0001 SECOND\n"
+                   << "1089-134686-0000 FIRST\n";
+    }
 
     const auto utterances = listLibriSpeechUtterances(datasetRoot, 1);
     assert(utterances.size() == 1);
