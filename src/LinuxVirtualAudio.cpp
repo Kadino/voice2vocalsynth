@@ -304,4 +304,49 @@ bool writeLinuxVirtualAudioManifest(const LinuxVirtualAudioManifestInfo& info,
     return static_cast<bool>(output);
 }
 
+LinuxVirtualAudioManifestLoadResult loadLinuxVirtualAudioManifest(std::string_view json)
+{
+    LinuxVirtualAudioManifestLoadResult result;
+    const auto route = extractJsonStringField(json, "selectedRoute");
+    const auto playback = extractJsonStringField(json, "playbackDevice");
+    const auto capture = extractJsonStringField(json, "captureDevice");
+    const auto server = extractJsonStringField(json, "serverName");
+    const auto note = extractJsonStringField(json, "note");
+
+    if (!route || !playback || !capture) {
+        result.error = "Linux virtual audio manifest is missing route or device fields";
+        return result;
+    }
+
+    result.info.route.routeId = *route;
+    result.info.route.playbackDevice = *playback;
+    result.info.route.captureDevice = *capture;
+    if (server) {
+        result.info.route.serverName = *server;
+    }
+    if (note) {
+        result.info.route.note = *note;
+    }
+    if (const auto probePassed = extractJsonBoolField(json, "probePassed")) {
+        result.info.probePassed = *probePassed;
+    }
+
+    result.ok = true;
+    return result;
+}
+
+LinuxVirtualAudioManifestLoadResult loadLinuxVirtualAudioManifestFile(
+    const std::filesystem::path& manifestPath)
+{
+    LinuxVirtualAudioManifestLoadResult result;
+    std::ifstream input(manifestPath, std::ios::binary);
+    if (!input) {
+        result.error = "Unable to read Linux virtual audio manifest: " + manifestPath.string();
+        return result;
+    }
+    std::ostringstream contents;
+    contents << input.rdbuf();
+    return loadLinuxVirtualAudioManifest(contents.str());
+}
+
 } // namespace Voice2VocalSynth

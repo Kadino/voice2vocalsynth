@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "20260710T120000Z",
+  "platform": "linux",
+  "primaryRoute": "pipewire-loopback",
+  "alternatives": ["alsa-snd-aloop", "jack"],
+  "selectedRoute": "pipewire-loopback",
+  "playbackDevice": "LivePhonemeVerify",
+  "captureDevice": "LivePhonemeVerify.monitor",
+  "serverName": "PulseAudio (on PipeWire 1.0.5)",
+  "probePassed": false,
+  "note": "Fixture manifest for playback tests",
+  "setupScript": "scripts/validate_linux_virtual_audio.sh"
+}

@@ -43,6 +43,13 @@ struct LinuxVirtualAudioManifestInfo
     std::vector<std::string> warnings;
 };
 
+struct LinuxVirtualAudioManifestLoadResult
+{
+    bool ok = false;
+    LinuxVirtualAudioManifestInfo info;
+    std::string error;
+};
+
 struct LinuxVirtualAudioCheckReportParseResult
 {
     bool ok = false;
@@ -79,5 +86,11 @@ struct LinuxVirtualAudioCheckReportParseResult
 [[nodiscard]] bool writeLinuxVirtualAudioManifest(const LinuxVirtualAudioManifestInfo& info,
                                                   const std::filesystem::path& manifestPath,
                                                   std::string& error);
+
+[[nodiscard]] LinuxVirtualAudioManifestLoadResult loadLinuxVirtualAudioManifest(
+    std::string_view json);
+
+[[nodiscard]] LinuxVirtualAudioManifestLoadResult loadLinuxVirtualAudioManifestFile(
+    const std::filesystem::path& manifestPath);
 
 } // namespace Voice2VocalSynth
