@@ -1,5 +1,9 @@
 #include "Voice2VocalSynth/ShellCli.h"
 
+#include <cmath>
+#include <exception>
+#include <stdexcept>
+
 namespace Voice2VocalSynth
 {
 namespace
@@ -38,13 +42,10 @@ namespace
                                       && !std::filesystem::exists(normalized));
 
     if (treatAsDirectory) {
-        out.runDirectory = normalized;
-        out.liveLog = out.runDirectory / "live-log.jsonl";
-        out.manifest = out.runDirectory / "manifest.json";
+        out = livePhonemeVerifyRunPaths(normalized);
     } else {
+        out = livePhonemeVerifyRunPaths(normalized.parent_path());
         out.liveLog = normalized;
-        out.runDirectory = out.liveLog.parent_path();
-        out.manifest = out.runDirectory / "manifest.json";
     }
 
     if (out.runDirectory.empty()) {
@@ -61,7 +62,12 @@ namespace
 
 std::string shellCliUsage()
 {
-    return "Voice2VocalSynthApp [--live-log-export] [--live-log-out <path>]";
+    return "Voice2VocalSynthApp [--live-log-export] [--live-log-out <path>] "
+           "[--phoneme-backend placeholder|onnx_phoneme|pocketsphinx] "
+           "[--pocketsphinx-model-root <path>] [--onnx-model <path>] "
+           "[--onnx-config <path>] [--capture-device <name>] "
+           "[--auto-loopback-measure] [--quit-after-seconds <seconds>] "
+           "[--quit-file <path>]";
 }
 
 std::optional<ShellLiveLogExportOptions> parseShellLiveLogExportArgs(const std::vector<std::string>& args,
@@ -82,6 +88,79 @@ std::optional<ShellLiveLogExportOptions> parseShellLiveLogExportArgs(const std::
                 return std::nullopt;
             }
             options.outputOverride = args[++index];
+            continue;
+        }
+        if (arg == "--phoneme-backend") {
+            if (index + 1 >= args.size()) {
+                error = "Missing value for --phoneme-backend";
+                return std::nullopt;
+            }
+            const auto& backend = args[++index];
+            if (backend != "placeholder" && backend != "onnx_phoneme" &&
+                backend != "pocketsphinx") {
+                error = "Unsupported phoneme backend: " + backend;
+                return std::nullopt;
+            }
+            options.phonemeBackend = backend;
+            continue;
+        }
+        if (arg == "--pocketsphinx-model-root" || arg == "--onnx-model" ||
+            arg == "--onnx-config") {
+            if (index + 1 >= args.size()) {
+                error = "Missing value for " + arg;
+                return std::nullopt;
+            }
+            const std::filesystem::path value = args[++index];
+            if (arg == "--pocketsphinx-model-root") {
+                options.pocketSphinxModelRoot = value;
+            } else if (arg == "--onnx-model") {
+                options.onnxModelPath = value;
+            } else {
+                options.onnxConfigPath = value;
+            }
+            continue;
+        }
+        if (arg == "--capture-device") {
+            if (index + 1 >= args.size()) {
+                error = "Missing value for --capture-device";
+                return std::nullopt;
+            }
+            options.captureDevice = args[++index];
+            continue;
+        }
+        if (arg == "--quit-file") {
+            if (index + 1 >= args.size()) {
+                error = "Missing value for --quit-file";
+                return std::nullopt;
+            }
+            options.quitFile = args[++index];
+            continue;
+        }
+        if (arg == "--quit-after-seconds") {
+            if (index + 1 >= args.size()) {
+                error = "Missing value for --quit-after-seconds";
+                return std::nullopt;
+            }
+            try {
+                const auto& value = args[++index];
+                std::size_t consumed = 0;
+                options.quitAfterSeconds = std::stod(value, &consumed);
+                if (consumed != value.size()) {
+                    throw std::invalid_argument("trailing content");
+                }
+            } catch (const std::exception&) {
+                error = "Invalid value for --quit-after-seconds";
+                return std::nullopt;
+            }
+            if (!std::isfinite(*options.quitAfterSeconds) ||
+                *options.quitAfterSeconds <= 0.0) {
+                error = "--quit-after-seconds must be positive";
+                return std::nullopt;
+            }
+            continue;
+        }
+        if (arg == "--auto-loopback-measure") {
+            options.autoLoopbackMeasure = true;
             continue;
         }
         error = "Unknown argument: " + arg;

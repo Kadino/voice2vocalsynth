@@ -116,14 +116,26 @@ bool createLivePhonemeVerifyRun(const std::filesystem::path& root,
     }
 
     const auto layout = livePhonemeVerifyLayout(root);
-    out.runDirectory = layout.runs / formatLivePhonemeVerifyRunTimestamp();
-    out.liveLog = out.runDirectory / "live-log.jsonl";
-    out.manifest = out.runDirectory / "manifest.json";
+    out = livePhonemeVerifyRunPaths(layout.runs / formatLivePhonemeVerifyRunTimestamp());
 
     if (!createDirectory(out.runDirectory, error)) {
         return false;
     }
     return true;
+}
+
+LivePhonemeVerifyRunPaths livePhonemeVerifyRunPaths(
+    const std::filesystem::path& runDirectory)
+{
+    LivePhonemeVerifyRunPaths paths;
+    paths.runDirectory = runDirectory;
+    paths.liveLog = runDirectory / "live-log.jsonl";
+    paths.manifest = runDirectory / "manifest.json";
+    paths.playbackManifest = runDirectory / "playback-manifest.json";
+    paths.predictions = runDirectory / "predictions.json";
+    paths.metrics = runDirectory / "metrics.json";
+    paths.report = runDirectory / "report.md";
+    return paths;
 }
 
 bool writeLivePhonemeVerifyManifest(const LivePhonemeVerifyRunPaths& paths, std::string& error)

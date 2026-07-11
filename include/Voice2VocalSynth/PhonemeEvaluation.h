@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <filesystem>
+#include <map>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -31,9 +32,15 @@ struct PhonemeEvaluationMetrics
     double recall = 0.0;
     double f1 = 0.0;
     double falsePositiveRate = 0.0;
+    double missedRate = 0.0;
     double missedConsonantRate = 0.0;
     double meanAbsoluteOnsetErrorMs = 0.0;
     double p95OnsetErrorMs = 0.0;
+    double meanAbsoluteEndErrorMs = 0.0;
+    double p95EndErrorMs = 0.0;
+    double meanAbsoluteDurationErrorMs = 0.0;
+    double p95DurationErrorMs = 0.0;
+    std::map<std::string, std::size_t> confusionCounts;
 };
 
 [[nodiscard]] PhonemeEvaluationMetrics evaluatePhonemeFrames(

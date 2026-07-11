@@ -12,8 +12,9 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 VERIFY_ROOT="${LIVE_PHONEME_VERIFY_ROOT:-${HOME}/.local/share/Voice2VocalSynth/LivePhonemeVerify}"
 DATASET_ROOT="${LIBRISPEECH_TEST_CLEAN_ROOT:-${VERIFY_ROOT}/datasets/LibriSpeech/test-clean}"
 AUDIO_MANIFEST="${VERIFY_ROOT}/linux-virtual-audio.json"
-SETUP_BIN="${REPO_ROOT}/build/Voice2VocalSynthLibriSpeechSetup"
-PLAYBACK_BIN="${REPO_ROOT}/build/Voice2VocalSynthLibriSpeechPlayback"
+BUILD_DIR="${VOICE2VOCALSYNTH_BUILD_DIR:-${REPO_ROOT}/build}"
+SETUP_BIN="${BUILD_DIR}/Voice2VocalSynthLibriSpeechSetup"
+PLAYBACK_BIN="${BUILD_DIR}/Voice2VocalSynthLibriSpeechPlayback"
 
 DEFAULT_SUBSET=20
 DEFAULT_GAP_SECONDS=0.5
@@ -58,9 +59,9 @@ EOF
 
 require_build_targets() {
   if [[ ! -x "${SETUP_BIN}" || ! -x "${PLAYBACK_BIN}" ]]; then
-    mkdir -p "${REPO_ROOT}/build"
-    CXX="${CXX:-g++}" cmake -S "${REPO_ROOT}" -B "${REPO_ROOT}/build" -DVOICE2VOCALSYNTH_BUILD_JUCE_APP=OFF >&2
-    cmake --build "${REPO_ROOT}/build" --target Voice2VocalSynthLibriSpeechSetup Voice2VocalSynthLibriSpeechPlayback -j"$(nproc)" >&2
+    mkdir -p "${BUILD_DIR}"
+    CXX="${CXX:-g++}" cmake -S "${REPO_ROOT}" -B "${BUILD_DIR}" -DVOICE2VOCALSYNTH_BUILD_JUCE_APP=OFF >&2
+    cmake --build "${BUILD_DIR}" --target Voice2VocalSynthLibriSpeechSetup Voice2VocalSynthLibriSpeechPlayback -j"$(nproc)" >&2
   fi
 }
 
@@ -148,7 +149,7 @@ build_durations_tsv() {
 play_manifest() {
   local manifest_path="$1"
   python3 - <<'PY' "${manifest_path}" "${GAP_SECONDS}"
-import json, subprocess, sys, time
+import json, os, subprocess, sys, time
 
 manifest_path, gap_seconds = sys.argv[1], float(sys.argv[2])
 plan = json.load(open(manifest_path))
@@ -163,10 +164,24 @@ def output_args():
     raise SystemExit(f"unsupported route id: {route_id}")
 
 clips = plan["clips"]
+
+def persist_plan():
+  temporary_path = manifest_path + ".tmp"
+  with open(temporary_path, "w", encoding="utf-8") as output:
+    json.dump(plan, output, indent=2)
+    output.write("\n")
+  os.replace(temporary_path, manifest_path)
+
 for index, clip in enumerate(clips):
   flac = clip["flacPath"]
   cmd = ["ffmpeg", "-nostdin", "-loglevel", "error", "-re", "-i", flac, *output_args(), "-"]
-  subprocess.run(cmd, check=True)
+  process = subprocess.Popen(cmd)
+  clip["playbackStartedSteadyNs"] = time.monotonic_ns()
+  if index == 0:
+    plan["playbackStartedSteadyNs"] = clip["playbackStartedSteadyNs"]
+  persist_plan()
+  if process.wait() != 0:
+    raise subprocess.CalledProcessError(process.returncode, cmd)
   if index + 1 < len(clips):
     time.sleep(gap_seconds)
 PY

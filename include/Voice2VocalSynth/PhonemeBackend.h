@@ -46,6 +46,9 @@ struct PhonemeBackendResult
   bool ok = true;
   std::string error;
   std::vector<PhonemeTemporalObservation> observations;
+  /// Backends with native stable segment boundaries may bypass the generic
+  /// observation stabilizer and return committed frames directly.
+  std::vector<PhonemeFrame> committedFrames;
   double backendLatencyMs = 0.0;
 };
 
@@ -56,6 +59,8 @@ public:
 
   [[nodiscard]] virtual const char* name() const noexcept = 0;
   [[nodiscard]] virtual PhonemeBackendDescriptor descriptor() const = 0;
+  /// Clears stream-specific decoder state when capture restarts.
+  virtual void reset() {}
   [[nodiscard]] virtual PhonemeBackendResult process(const PhonemeBackendAudioFrame& frame) = 0;
 };
 

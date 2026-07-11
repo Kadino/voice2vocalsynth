@@ -12,6 +12,7 @@ set(VOICE2VOCALSYNTH_PHONEME_REPOSITORY_FIXTURE "${CMAKE_SOURCE_DIR}/tests/fixtu
     CACHE PATH "Configurable path to the repository phoneme ONNX test fixture (presets + unit tests)")
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/OnnxRuntime.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/PocketSphinx.cmake")
 
 set(_phoneme_fixture_slash "${VOICE2VOCALSYNTH_PHONEME_REPOSITORY_FIXTURE}")
 file(TO_CMAKE_PATH "${_phoneme_fixture_slash}" _phoneme_fixture_slash)
@@ -27,6 +28,8 @@ add_library(Voice2VocalSynthCore
     src/EvalDataPaths.cpp
     src/InferenceLatencyTracker.cpp
     src/LatencyBudget.cpp
+    src/LivePhonemeVerification.cpp
+    src/LivePhonemeVerifyCli.cpp
     src/LivePhonemeVerifyPaths.cpp
     src/LibriSpeechDataset.cpp
     src/LibriSpeechDatasetCli.cpp
@@ -49,6 +52,7 @@ add_library(Voice2VocalSynthCore
     src/PhonemeOnnxAsyncRunner.cpp
     src/PhonemeOnnxBackend.cpp
     src/PhonemeOnnxRunner.cpp
+    src/PocketSphinxPhonemeBackend.cpp
     src/PhonemeTemporalStabilizer.cpp
     src/PhonemeFallbackMapper.cpp
     src/PhonemeMappingConfigLoader.cpp
@@ -87,6 +91,15 @@ if(VOICE2VOCALSYNTH_ONNX_AVAILABLE)
     if(UNIX AND NOT APPLE)
         list(APPEND CMAKE_BUILD_RPATH "${VOICE2VOCALSYNTH_ONNXRUNTIME_ROOT}/lib")
     endif()
+endif()
+
+if(VOICE2VOCALSYNTH_POCKETSPHINX_AVAILABLE)
+    target_compile_definitions(Voice2VocalSynthCore
+        PUBLIC
+            VOICE2VOCALSYNTH_WITH_POCKETSPHINX=1
+        PRIVATE
+            "VOICE2VOCALSYNTH_POCKETSPHINX_MODEL_ROOT=\"${VOICE2VOCALSYNTH_POCKETSPHINX_MODEL_ROOT}\"")
+    target_link_libraries(Voice2VocalSynthCore PRIVATE pocketsphinx)
 endif()
 
 if(VOICE2VOCALSYNTH_BUILD_JUCE_APP)
@@ -144,6 +157,13 @@ target_link_libraries(Voice2VocalSynthPhonemeBakeoff
     PRIVATE
         Voice2VocalSynthCore)
 
+add_executable(Voice2VocalSynthLivePhonemeVerify
+    apps/live-phoneme-verify/main.cpp)
+
+target_link_libraries(Voice2VocalSynthLivePhonemeVerify
+    PRIVATE
+        Voice2VocalSynthCore)
+
 if(VOICE2VOCALSYNTH_ONNX_AVAILABLE)
     voice2vocalsynth_copy_onnx_runtime_runtime_deps(Voice2VocalSynthPhonemeBakeoff)
 endif()
@@ -181,6 +201,15 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
             Voice2VocalSynthCore)
 
     add_test(NAME PhonemeBackendTests COMMAND PhonemeBackendTests)
+
+    add_executable(PocketSphinxPhonemeBackendTests
+        tests/PocketSphinxPhonemeBackendTests.cpp)
+
+    target_link_libraries(PocketSphinxPhonemeBackendTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    add_test(NAME PocketSphinxPhonemeBackendTests COMMAND PocketSphinxPhonemeBackendTests)
 
     add_executable(PhonemeOnnxBackendTests
         tests/PhonemeOnnxBackendTests.cpp)
@@ -238,6 +267,15 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
             Voice2VocalSynthCore)
 
     add_test(NAME LivePhonemeVerifyPathsTests COMMAND LivePhonemeVerifyPathsTests)
+
+    add_executable(LivePhonemeVerificationTests
+        tests/LivePhonemeVerificationTests.cpp)
+
+    target_link_libraries(LivePhonemeVerificationTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    add_test(NAME LivePhonemeVerificationTests COMMAND LivePhonemeVerificationTests)
 
     add_executable(ShellCliTests
         tests/ShellCliTests.cpp)

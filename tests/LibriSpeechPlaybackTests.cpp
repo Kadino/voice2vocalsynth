@@ -96,7 +96,9 @@ void writesPlaybackManifest()
     plan.playbackDevice = "LivePhonemeVerify";
     plan.routeId = "pipewire-loopback";
     plan.runDirectory = "/tmp/run";
-    plan.clips.push_back({"1089-134686-0000", "/tmp/a.flac", 3.25, 0.0});
+    plan.playbackStartedSteadyNs = 123456789;
+    plan.clips.push_back(
+        {"1089-134686-0000", "/tmp/a.flac", 3.25, 0.0, 123456790});
 
     const auto root = tempRoot();
     const auto manifestPath = defaultLibriSpeechPlaybackManifestPath(root);
@@ -108,6 +110,12 @@ void writesPlaybackManifest()
     const std::string text((std::istreambuf_iterator<char>(manifest)), std::istreambuf_iterator<char>());
     assert(text.find("\"realtime\": true") != std::string::npos);
     assert(text.find("startOffsetSeconds") != std::string::npos);
+    const auto loaded = parseLibriSpeechPlaybackManifest(text);
+    assert(loaded.ok);
+    assert(loaded.plan.playbackStartedSteadyNs == 123456789);
+    assert(loaded.plan.clips.size() == 1);
+    assert(loaded.plan.clips[0].utteranceId == "1089-134686-0000");
+    assert(loaded.plan.clips[0].playbackStartedSteadyNs == 123456790);
 
     std::filesystem::remove_all(root);
 }

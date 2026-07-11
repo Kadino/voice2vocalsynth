@@ -13,7 +13,8 @@ VERIFY_ROOT="${LIVE_PHONEME_VERIFY_ROOT:-${HOME}/.local/share/Voice2VocalSynth/L
 DATASETS_DIR="${VERIFY_ROOT}/datasets"
 ARCHIVE_URL="https://www.openslr.org/resources/12/test-clean.tar.gz"
 ARCHIVE_NAME="test-clean.tar.gz"
-SETUP_BIN="${REPO_ROOT}/build/Voice2VocalSynthLibriSpeechSetup"
+BUILD_DIR="${VOICE2VOCALSYNTH_BUILD_DIR:-${REPO_ROOT}/build}"
+SETUP_BIN="${BUILD_DIR}/Voice2VocalSynthLibriSpeechSetup"
 
 usage() {
   cat <<EOF
@@ -58,11 +59,11 @@ EOF
 require_setup_binary() {
   if [[ ! -x "${SETUP_BIN}" ]]; then
     echo "Building Voice2VocalSynthLibriSpeechSetup..." >&2
-    mkdir -p "${REPO_ROOT}/build"
+    mkdir -p "${BUILD_DIR}"
   fi
   if [[ ! -x "${SETUP_BIN}" ]]; then
-    CXX="${CXX:-g++}" cmake -S "${REPO_ROOT}" -B "${REPO_ROOT}/build" -DVOICE2VOCALSYNTH_BUILD_JUCE_APP=OFF >&2
-    cmake --build "${REPO_ROOT}/build" --target Voice2VocalSynthLibriSpeechSetup -j"$(nproc)" >&2
+    CXX="${CXX:-g++}" cmake -S "${REPO_ROOT}" -B "${BUILD_DIR}" -DVOICE2VOCALSYNTH_BUILD_JUCE_APP=OFF >&2
+    cmake --build "${BUILD_DIR}" --target Voice2VocalSynthLibriSpeechSetup -j"$(nproc)" >&2
   fi
 }
 

@@ -16,11 +16,16 @@
 #include "Voice2VocalSynth/WhistleDetector.h"
 #include "Voice2VocalSynth/ShellCli.h"
 
+#if defined(VOICE2VOCALSYNTH_WITH_POCKETSPHINX)
+#include "Voice2VocalSynth/PocketSphinxPhonemeBackend.h"
+#endif
+
 #if defined(VOICE2VOCALSYNTH_WITH_ONNX)
 #include "Voice2VocalSynth/PhonemeOnnxAsyncRunner.h"
 #endif
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <deque>
 #include <memory>
@@ -36,6 +41,7 @@ class MainComponent final : public juce::Component,
 {
 public:
     explicit MainComponent(
+        Voice2VocalSynth::ShellLiveLogExportOptions launchOptions = {},
         std::optional<Voice2VocalSynth::ShellLiveLogExportPaths> liveLogExportPaths = std::nullopt);
     ~MainComponent() override;
 
@@ -118,6 +124,9 @@ private:
 #if defined(VOICE2VOCALSYNTH_WITH_ONNX)
     std::unique_ptr<Voice2VocalSynth::PhonemeOnnxBackend> phonemeOnnxBackend_;
 #endif
+#if defined(VOICE2VOCALSYNTH_WITH_POCKETSPHINX)
+    std::unique_ptr<Voice2VocalSynth::PocketSphinxPhonemeBackend> pocketSphinxBackend_;
+#endif
     Voice2VocalSynth::PhonemeTemporalStabilizer phonemeStabilizer_;
     Voice2VocalSynth::VoiceActivityDetector voiceVad_;
     Voice2VocalSynth::WhistleDetector whistleDetector_;
@@ -131,15 +140,20 @@ private:
     juce::String phonemeMappingPath_;
     juce::String phonemeOnnxModelPath_;
     juce::String phonemeOnnxConfigPath_;
+    juce::String pocketSphinxModelRoot_;
     bool phonemeOnnxUseRepositoryFixture_ = true;
     bool whistleModeActive_ = false;
     int phonemeThrottleCounter_ = 0;
     std::deque<std::string> liveLogLines_;
     bool loopbackResultLogged_ = false;
+    Voice2VocalSynth::ShellLiveLogExportOptions launchOptions_;
     std::optional<Voice2VocalSynth::ShellLiveLogExportPaths> liveLogExportPaths_;
     std::unique_ptr<std::ofstream> liveLogFile_;
     std::mutex liveLogFileMutex_;
     bool liveLogExportReady_ = false;
+    std::string startupError_;
+    std::chrono::steady_clock::time_point launchSteadyTime_ = std::chrono::steady_clock::now();
+    bool timedQuitRequested_ = false;
 
 #if defined(VOICE2VOCALSYNTH_WITH_ONNX)
     std::unique_ptr<Voice2VocalSynth::PhonemeOnnxAsyncRunner> phonemeAsync_;

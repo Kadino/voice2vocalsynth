@@ -12,8 +12,9 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 VERIFY_ROOT="${LIVE_PHONEME_VERIFY_ROOT:-${HOME}/.local/share/Voice2VocalSynth/LivePhonemeVerify}"
 DATASET_ROOT="${LIBRISPEECH_TEST_CLEAN_ROOT:-${VERIFY_ROOT}/datasets/LibriSpeech/test-clean}"
 LABELS_ROOT="${VERIFY_ROOT}/labels/librispeech-test-clean"
-SETUP_BIN="${REPO_ROOT}/build/Voice2VocalSynthLibriSpeechSetup"
-CONVERT_BIN="${REPO_ROOT}/build/Voice2VocalSynthMfaLabelConvert"
+BUILD_DIR="${VOICE2VOCALSYNTH_BUILD_DIR:-${REPO_ROOT}/build}"
+SETUP_BIN="${BUILD_DIR}/Voice2VocalSynthLibriSpeechSetup"
+CONVERT_BIN="${BUILD_DIR}/Voice2VocalSynthMfaLabelConvert"
 
 ACOUSTIC_MODEL="${MFA_ACOUSTIC_MODEL:-english_us_arpa}"
 DICTIONARY_MODEL="${MFA_DICTIONARY_MODEL:-english_us_arpa}"
@@ -21,7 +22,7 @@ DEFAULT_SUBSET=20
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [--help] [--check-mfa] [--subset N] [--all]
+Usage: $(basename "$0") [--help] [--check-mfa] [--subset N] [--all] [--utterance-id ID]
 
 Generate per-utterance ARPABET reference labels from LibriSpeech test-clean using
 Montreal Forced Aligner (MFA). Output JSON files are accepted by
@@ -38,6 +39,7 @@ Commands:
   --check-mfa  Verify MFA, ffmpeg, and required models are available
   --subset N   Align first N utterances (default: ${DEFAULT_SUBSET})
   --all        Align the full test-clean corpus
+  --utterance-id ID  Align one utterance
 
 MFA install (not bundled):
   https://montreal-forced-aligner.readthedocs.io/en/latest/getting_started.html
@@ -66,9 +68,9 @@ EOF
 
 require_build_targets() {
   if [[ ! -x "${SETUP_BIN}" || ! -x "${CONVERT_BIN}" ]]; then
-    mkdir -p "${REPO_ROOT}/build"
-    CXX="${CXX:-g++}" cmake -S "${REPO_ROOT}" -B "${REPO_ROOT}/build" -DVOICE2VOCALSYNTH_BUILD_JUCE_APP=OFF >&2
-    cmake --build "${REPO_ROOT}/build" --target Voice2VocalSynthLibriSpeechSetup Voice2VocalSynthMfaLabelConvert -j"$(nproc)" >&2
+    mkdir -p "${BUILD_DIR}"
+    CXX="${CXX:-g++}" cmake -S "${REPO_ROOT}" -B "${BUILD_DIR}" -DVOICE2VOCALSYNTH_BUILD_JUCE_APP=OFF >&2
+    cmake --build "${BUILD_DIR}" --target Voice2VocalSynthLibriSpeechSetup Voice2VocalSynthMfaLabelConvert -j"$(nproc)" >&2
   fi
 }
 
@@ -124,7 +126,16 @@ prepare_and_align() {
   local textgrid_dir="${work_root}/textgrids"
   mkdir -p "${corpus_dir}" "${textgrid_dir}" "${LABELS_ROOT}"
 
-  mapfile -t utterance_rows < <("${SETUP_BIN}" --list-utterances --dataset-root "${DATASET_ROOT}" --limit "${limit}")
+  if [[ -n "${UTTERANCE_ID}" ]]; then
+    mapfile -t utterance_rows < <(
+      "${SETUP_BIN}" --list-utterances --dataset-root "${DATASET_ROOT}" --limit 0 |
+        awk -F $'\t' -v id="${UTTERANCE_ID}" '$1 == id'
+    )
+  else
+    mapfile -t utterance_rows < <(
+      "${SETUP_BIN}" --list-utterances --dataset-root "${DATASET_ROOT}" --limit "${limit}"
+    )
+  fi
   if [[ "${#utterance_rows[@]}" -eq 0 ]]; then
     echo "error: no utterances found under ${DATASET_ROOT}" >&2
     exit 1
@@ -162,6 +173,7 @@ prepare_and_align() {
 
 ACTION=""
 SUBSET_COUNT="${DEFAULT_SUBSET}"
+UTTERANCE_ID=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -182,6 +194,11 @@ while [[ $# -gt 0 ]]; do
       ACTION="all"
       shift
       ;;
+    --utterance-id)
+      ACTION="utterance"
+      UTTERANCE_ID="${2:?missing value for --utterance-id}"
+      shift 2
+      ;;
     *)
       echo "error: unknown argument: $1" >&2
       usage >&2
@@ -199,5 +216,8 @@ case "${ACTION:-subset}" in
     ;;
   all)
     prepare_and_align 0 "all"
+    ;;
+  utterance)
+    prepare_and_align 0 "utterance:${UTTERANCE_ID}"
     ;;
 esac
