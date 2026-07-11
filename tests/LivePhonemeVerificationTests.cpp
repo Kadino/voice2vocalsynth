@@ -48,6 +48,51 @@ LiveVerificationGateOptions passingGates()
     return gates;
 }
 
+std::vector<std::string> cliGateArgs()
+{
+    return {
+        "--max-e2e-latency-ms", "1000",
+        "--min-f1", "0.5",
+        "--max-mean-onset-error-ms", "50",
+        "--max-p95-onset-error-ms", "50",
+        "--max-mean-end-error-ms", "50",
+        "--max-p95-end-error-ms", "50",
+        "--max-mean-duration-error-ms", "50",
+        "--max-missed-consonant-rate", "0.5",
+    };
+}
+
+void writePassingVerificationFixtures(const std::filesystem::path& root,
+                                      std::filesystem::path& liveLogPath,
+                                      std::filesystem::path& manifestPath,
+                                      std::filesystem::path& labelsRoot)
+{
+    liveLogPath = root / "live-log.jsonl";
+    manifestPath = root / "playback-manifest.json";
+    labelsRoot = root / "labels";
+    std::filesystem::create_directories(labelsRoot);
+
+    std::ofstream(liveLogPath) << sampleLog();
+
+    LibriSpeechPlaybackPlan playback;
+    playback.playbackStartedSteadyNs = 2000000000;
+    playback.playbackDevice = "LivePhonemeVerify";
+    playback.routeId = "pipewire-loopback";
+    playback.runDirectory = root.string();
+    playback.totalDurationSeconds = 0.5;
+    playback.clips.push_back(
+        {"utt-1", "/tmp/utt-1.flac", 0.5, 0.0, 2000000000});
+
+    std::string error;
+    assert(writeLibriSpeechPlaybackManifest(playback, manifestPath, error));
+
+    PhonemeFrame reference;
+    reference.arpabet = "K";
+    reference.estimatedOnsetSeconds = 0.1;
+    reference.estimatedEndSeconds = 0.15;
+    assert(writePhonemeLabelJsonFile(labelsRoot / "utt-1.json", {reference}, error));
+}
+
 void parsesAndConvertsLiveLog()
 {
     const auto parsed = parseLivePhonemeLogJsonl(sampleLog());
@@ -267,6 +312,68 @@ void scoresMultiClipPlayback()
     std::filesystem::remove_all(root);
 }
 
+void cliPassesAlignedVerification()
+{
+    const auto root = tempRoot();
+    std::filesystem::path liveLogPath;
+    std::filesystem::path manifestPath;
+    std::filesystem::path labelsRoot;
+    writePassingVerificationFixtures(root, liveLogPath, manifestPath, labelsRoot);
+
+    std::vector<std::string> args {
+        "Voice2VocalSynthLivePhonemeVerify",
+        "--live-log", liveLogPath.string(),
+        "--playback-manifest", manifestPath.string(),
+        "--labels-root", labelsRoot.string(),
+        "--backend", "pocketsphinx",
+        "--predictions-out", (root / "predictions.json").string(),
+        "--metrics-out", (root / "metrics.json").string(),
+        "--report-out", (root / "report.md").string(),
+    };
+    for (const auto& gateArg : cliGateArgs()) {
+        args.push_back(gateArg);
+    }
+
+    const auto result = runLivePhonemeVerifyCli(args);
+    assert(result.exitCode == LivePhonemeVerifyCliExitCode::Success);
+    assert(result.message.find("Live verification passed") != std::string::npos);
+    assert(std::filesystem::file_size(root / "predictions.json") > 0);
+    assert(std::filesystem::file_size(root / "metrics.json") > 0);
+    assert(std::filesystem::file_size(root / "report.md") > 0);
+
+    std::filesystem::remove_all(root);
+}
+
+void cliReturnsGateFailedExitCode()
+{
+    const auto root = tempRoot();
+    std::filesystem::path liveLogPath;
+    std::filesystem::path manifestPath;
+    std::filesystem::path labelsRoot;
+    writePassingVerificationFixtures(root, liveLogPath, manifestPath, labelsRoot);
+
+    std::vector<std::string> args {
+        "Voice2VocalSynthLivePhonemeVerify",
+        "--live-log", liveLogPath.string(),
+        "--playback-manifest", manifestPath.string(),
+        "--labels-root", labelsRoot.string(),
+        "--backend", "placeholder",
+        "--predictions-out", (root / "predictions.json").string(),
+        "--metrics-out", (root / "metrics.json").string(),
+        "--report-out", (root / "report.md").string(),
+    };
+    for (const auto& gateArg : cliGateArgs()) {
+        args.push_back(gateArg);
+    }
+
+    const auto result = runLivePhonemeVerifyCli(args);
+    assert(result.exitCode == LivePhonemeVerifyCliExitCode::GateFailed);
+    assert(result.message.find("gates failed") != std::string::npos);
+    assert(std::filesystem::file_size(root / "metrics.json") > 0);
+
+    std::filesystem::remove_all(root);
+}
+
 } // namespace
 
 int main()
@@ -280,6 +387,8 @@ int main()
     parsesOnnxLatencyLines();
     computesE2eFromLatencyMeasure();
     scoresMultiClipPlayback();
+    cliPassesAlignedVerification();
+    cliReturnsGateFailedExitCode();
     std::cout << "LivePhonemeVerification tests passed\n";
     return 0;
 }

@@ -96,6 +96,71 @@ void parsesCliArgs()
     assert(error.empty());
 }
 
+void rejectsEmptyDatasetRoot()
+{
+    const auto root = tempVerifyRoot() / "LibriSpeech" / "test-clean";
+    std::filesystem::create_directories(root);
+
+    const auto validation = validateLibriSpeechTestClean(root);
+    assert(!validation.valid);
+    assert(!validation.error.empty());
+
+    std::filesystem::remove_all(root.parent_path().parent_path());
+}
+
+void rejectsDatasetMissingFlac()
+{
+    const auto root = tempVerifyRoot() / "LibriSpeech" / "test-clean";
+    const auto chapter = root / "1089" / "134686";
+    std::filesystem::create_directories(chapter);
+    std::ofstream transcript(chapter / "1089-134686.trans.txt");
+    transcript << "1089-134686-0000 A TEST TRANSCRIPT\n";
+
+    const auto validation = validateLibriSpeechTestClean(root);
+    assert(!validation.valid);
+    assert(validation.error.find(".flac") != std::string::npos);
+
+    std::filesystem::remove_all(root.parent_path().parent_path());
+}
+
+void cliVerifiesAndListsUtterances()
+{
+    const auto verifyRoot = tempVerifyRoot();
+    createMiniDataset(defaultLibriSpeechTestCleanRoot(verifyRoot));
+
+    LibriSpeechDatasetCliOptions verifyOptions;
+    verifyOptions.action = LibriSpeechDatasetCliAction::Verify;
+    verifyOptions.verifyRoot = verifyRoot;
+    const auto verifyResult = runLibriSpeechDatasetCli(verifyOptions);
+    assert(verifyResult.exitCode == LibriSpeechDatasetCliExitCode::Success);
+    assert(verifyResult.message.find("flac files: 1") != std::string::npos);
+
+    LibriSpeechDatasetCliOptions listOptions;
+    listOptions.action = LibriSpeechDatasetCliAction::ListUtterances;
+    listOptions.verifyRoot = verifyRoot;
+    listOptions.utteranceLimit = 1;
+    const auto listResult = runLibriSpeechDatasetCli(listOptions);
+    assert(listResult.exitCode == LibriSpeechDatasetCliExitCode::Success);
+    assert(listResult.message.find("1089-134686-0000") != std::string::npos);
+
+    std::filesystem::remove_all(verifyRoot);
+}
+
+void cliRejectsInvalidDatasetRoot()
+{
+    const auto verifyRoot = tempVerifyRoot();
+    LibriSpeechDatasetCliOptions options;
+    options.action = LibriSpeechDatasetCliAction::Verify;
+    options.verifyRoot = verifyRoot;
+    options.datasetRootOverride = verifyRoot / "missing-dataset";
+
+    const auto result = runLibriSpeechDatasetCli(options);
+    assert(result.exitCode == LibriSpeechDatasetCliExitCode::RuntimeError);
+    assert(!result.message.empty());
+
+    std::filesystem::remove_all(verifyRoot);
+}
+
 } // namespace
 
 int main()
@@ -104,6 +169,10 @@ int main()
     discoversDefaultLayout();
     writesManifest();
     parsesCliArgs();
+    rejectsEmptyDatasetRoot();
+    rejectsDatasetMissingFlac();
+    cliVerifiesAndListsUtterances();
+    cliRejectsInvalidDatasetRoot();
     std::cout << "LibriSpeechDataset tests passed\n";
     return 0;
 }
