@@ -10,11 +10,13 @@ SUBSET=20
 OUTPUT=""
 ONNX_MODEL=""
 ONNX_CONFIG=""
+DRY_RUN=0
 
 usage() {
   cat <<EOF
 Usage: $(basename "$0") [--backends comma,separated,list] [--subset N]
        [--output comparison.json] [--onnx-model FILE --onnx-config FILE]
+       [--dry-run]
 
 Every backend is replayed through the JUCE live path. Placeholder is retained
 as a negative baseline and cannot pass. The command exits non-zero when no
@@ -30,9 +32,45 @@ while [[ $# -gt 0 ]]; do
     --output) OUTPUT="${2:?missing value for --output}"; shift 2 ;;
     --onnx-model) ONNX_MODEL="${2:?missing value for --onnx-model}"; shift 2 ;;
     --onnx-config) ONNX_CONFIG="${2:?missing value for --onnx-config}"; shift 2 ;;
+    --dry-run) DRY_RUN=1; shift ;;
     *) echo "error: unknown argument: $1" >&2; usage >&2; exit 1 ;;
   esac
 done
+
+IFS=',' read -r -a backend_list <<<"${BACKENDS}"
+if [[ "${DRY_RUN}" -eq 1 ]]; then
+  comparison_dir="${VERIFY_ROOT}/runs/$(date -u +%Y%m%dT%H%M%SZ)-comparison-dry-run"
+  mkdir -p "${comparison_dir}"
+  if [[ -z "${OUTPUT}" ]]; then
+    OUTPUT="${comparison_dir}/comparison-plan.json"
+  fi
+  python3 - "${OUTPUT}" "${comparison_dir}" "${SUBSET}" "${backend_list[@]}" <<'PY'
+import json, pathlib, sys
+
+output = pathlib.Path(sys.argv[1])
+comparison_dir = pathlib.Path(sys.argv[2])
+subset = int(sys.argv[3])
+backends = [item.strip() for item in sys.argv[4:] if item.strip()]
+rows = []
+for backend in backends:
+    rows.append({
+        "backend": backend,
+        "runDir": str(comparison_dir / backend),
+        "subset": subset,
+        "liveVerification": True,
+    })
+payload = {
+    "schemaVersion": 1,
+    "dryRun": True,
+    "liveVerification": True,
+    "backends": rows,
+}
+output.parent.mkdir(parents=True, exist_ok=True)
+output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+print(f"Dry run complete: {output}")
+PY
+  exit 0
+fi
 
 comparison_dir="${VERIFY_ROOT}/runs/$(date -u +%Y%m%dT%H%M%SZ)-comparison"
 mkdir -p "${comparison_dir}"
@@ -40,7 +78,6 @@ if [[ -z "${OUTPUT}" ]]; then
   OUTPUT="${comparison_dir}/comparison.json"
 fi
 
-IFS=',' read -r -a backend_list <<<"${BACKENDS}"
 metrics_files=()
 for backend in "${backend_list[@]}"; do
   backend="${backend//[[:space:]]/}"

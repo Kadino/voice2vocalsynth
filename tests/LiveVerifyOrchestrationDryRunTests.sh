@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Lightweight CTest harness for bash orchestration --dry-run paths (spec futureHardening).
+# CTest harness for run_live_phoneme_verify_linux.sh --dry-run (spec futureHardening).
 
 set -euo pipefail
 
 if [[ "$(uname -s)" != "Linux" ]]; then
-  echo "ScriptDryRunTests: skipped (Linux-only orchestration scripts)"
+  echo "LiveVerifyOrchestrationDryRunTests: skipped (Linux-only)"
   exit 0
 fi
 
@@ -17,18 +17,19 @@ if [[ -z "${VOICE2VOCALSYNTH_BUILD_DIR:-}" ]]; then
   exit 1
 fi
 
-for tool in ffmpeg ffprobe python3; do
+for tool in ffmpeg ffprobe python3 rg; do
   if ! command -v "${tool}" >/dev/null 2>&1; then
-    echo "ScriptDryRunTests: skipped (missing ${tool})"
+    echo "LiveVerifyOrchestrationDryRunTests: skipped (missing ${tool})"
     exit 0
   fi
 done
 
-WORK_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/v2vs-script-dry-run.XXXXXX")"
+WORK_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/v2vs-live-verify-dry-run.XXXXXX")"
 VERIFY_ROOT="${WORK_ROOT}/verify"
 DATASET_ROOT="${VERIFY_ROOT}/datasets/LibriSpeech/test-clean"
 RUN_DIR="${WORK_ROOT}/run"
 UTTERANCE_ID="1089-134686-0000"
+STUB_APP="${WORK_ROOT}/stub-voice2vocalsynth-app"
 
 cleanup() {
   rm -rf "${WORK_ROOT}"
@@ -46,14 +47,25 @@ ffmpeg -y -nostdin -loglevel error \
   -c:a flac "${CHAPTER}/${UTTERANCE_ID}.flac"
 printf '%s FIRST UTTERANCE\n' "${UTTERANCE_ID}" > "${CHAPTER}/1089-134686.trans.txt"
 
+cat > "${STUB_APP}" <<'EOF'
+#!/usr/bin/env bash
+echo "stub Voice2VocalSynthApp for orchestration dry-run"
+exit 0
+EOF
+chmod +x "${STUB_APP}"
+
 export LIVE_PHONEME_VERIFY_ROOT="${VERIFY_ROOT}"
 export LIBRISPEECH_TEST_CLEAN_ROOT="${DATASET_ROOT}"
 export VOICE2VOCALSYNTH_BUILD_DIR="${BUILD_DIR}"
+export VOICE2VOCALSYNTH_APP_BIN="${STUB_APP}"
 
-output="$("${SCRIPT_DIR}/play_librispeech_clips_linux.sh" \
+output="$("${SCRIPT_DIR}/run_live_phoneme_verify_linux.sh" \
+  --skip-build \
+  --skip-setup \
+  --skip-audio-check \
+  --skip-audio-probe \
   --dry-run \
   --utterance-id "${UTTERANCE_ID}" \
-  --playback-device "FixtureSink" \
   --run-dir "${RUN_DIR}" \
   2>&1)"
 
@@ -69,51 +81,15 @@ import json, sys
 
 manifest_path, utterance_id = sys.argv[1], sys.argv[2]
 plan = json.load(open(manifest_path, encoding="utf-8"))
-assert plan["playbackDevice"] == "FixtureSink"
 assert len(plan["clips"]) == 1
-clip = plan["clips"][0]
-assert clip["utteranceId"] == utterance_id
-assert clip["durationSeconds"] > 0.0
-assert clip["startOffsetSeconds"] == 0.0
+assert plan["clips"][0]["utteranceId"] == utterance_id
+assert plan["clips"][0]["durationSeconds"] > 0.0
 PY
 
 if ! printf '%s\n' "${output}" | grep -q "Dry run complete:"; then
-  echo "error: play script did not report dry-run completion" >&2
+  echo "error: orchestration script did not report dry-run completion" >&2
   printf '%s\n' "${output}" >&2
   exit 1
 fi
 
-SETUP_BIN="${BUILD_DIR}/Voice2VocalSynthLibriSpeechSetup"
-if [[ -x "${SETUP_BIN}" ]]; then
-  "${SETUP_BIN}" --verify --verify-root "${VERIFY_ROOT}" >/dev/null
-else
-  echo "ScriptDryRunTests: skipped LibriSpeech setup verify (binary missing)"
-fi
-
-COMPARE_OUTPUT="${WORK_ROOT}/comparison-plan.json"
-compare_output="$("${SCRIPT_DIR}/compare_live_phoneme_backends_linux.sh" \
-  --dry-run \
-  --backends "placeholder,pocketsphinx" \
-  --subset 1 \
-  --output "${COMPARE_OUTPUT}" \
-  2>&1)"
-if [[ ! -f "${COMPARE_OUTPUT}" ]]; then
-  echo "error: compare dry-run did not write comparison plan" >&2
-  printf '%s\n' "${compare_output}" >&2
-  exit 1
-fi
-python3 - "${COMPARE_OUTPUT}" <<'PY'
-import json, sys
-
-plan = json.load(open(sys.argv[1], encoding="utf-8"))
-assert plan["dryRun"] is True
-assert len(plan["backends"]) == 2
-assert {row["backend"] for row in plan["backends"]} == {"placeholder", "pocketsphinx"}
-PY
-if ! printf '%s\n' "${compare_output}" | grep -q "Dry run complete:"; then
-  echo "error: compare script did not report dry-run completion" >&2
-  printf '%s\n' "${compare_output}" >&2
-  exit 1
-fi
-
-echo "ScriptDryRunTests passed"
+echo "LiveVerifyOrchestrationDryRunTests passed"

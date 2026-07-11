@@ -18,6 +18,8 @@ UTTERANCE_ID=""
 RUN_DIR=""
 SKIP_SETUP=0
 SKIP_AUDIO_PROBE=0
+SKIP_BUILD=0
+SKIP_AUDIO_CHECK=0
 DRY_RUN=0
 POCKETSPHINX_MODEL_ROOT=""
 ONNX_MODEL=""
@@ -39,7 +41,8 @@ usage() {
 Usage: $(basename "$0") [--backend pocketsphinx|onnx_phoneme|placeholder]
        [--subset N | --all | --utterance-id ID] [--run-dir DIR]
        [--pocketsphinx-model-root DIR] [--onnx-model FILE --onnx-config FILE]
-       [--skip-setup] [--skip-audio-probe] [--dry-run]
+       [--skip-setup] [--skip-audio-probe] [--skip-build] [--skip-audio-check]
+       [--dry-run]
 
 Runs LibriSpeech at 1.0x through validated Linux virtual audio, captures the
 selected backend in the JUCE shell, scores only live ph_frame records, writes
@@ -74,6 +77,8 @@ while [[ $# -gt 0 ]]; do
     --onnx-config) ONNX_CONFIG="${2:?missing value for --onnx-config}"; shift 2 ;;
     --skip-setup) SKIP_SETUP=1; shift ;;
     --skip-audio-probe) SKIP_AUDIO_PROBE=1; shift ;;
+    --skip-build) SKIP_BUILD=1; shift ;;
+    --skip-audio-check) SKIP_AUDIO_CHECK=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     *) echo "error: unknown argument: $1" >&2; usage >&2; exit 1 ;;
   esac
@@ -97,12 +102,14 @@ if ! command -v rg >/dev/null 2>&1; then
 fi
 
 mkdir -p "${BUILD_DIR}" "${VERIFY_ROOT}/runs"
-cmake -S "${REPO_ROOT}" -B "${BUILD_DIR}" -DVOICE2VOCALSYNTH_BUILD_JUCE_APP=ON
-cmake --build "${BUILD_DIR}" \
-  --target Voice2VocalSynthApp Voice2VocalSynthLivePhonemeVerify \
-           Voice2VocalSynthLibriSpeechSetup Voice2VocalSynthMfaLabelConvert \
-           Voice2VocalSynthLinuxAudioValidate Voice2VocalSynthLibriSpeechPlayback \
-  -j"$(nproc)"
+if [[ "${SKIP_BUILD}" -eq 0 ]]; then
+  cmake -S "${REPO_ROOT}" -B "${BUILD_DIR}" -DVOICE2VOCALSYNTH_BUILD_JUCE_APP=ON
+  cmake --build "${BUILD_DIR}" \
+    --target Voice2VocalSynthApp Voice2VocalSynthLivePhonemeVerify \
+             Voice2VocalSynthLibriSpeechSetup Voice2VocalSynthMfaLabelConvert \
+             Voice2VocalSynthLinuxAudioValidate Voice2VocalSynthLibriSpeechPlayback \
+    -j"$(nproc)"
+fi
 
 APP_BIN="${VOICE2VOCALSYNTH_APP_BIN:-}"
 if [[ -z "${APP_BIN}" ]]; then
@@ -126,11 +133,18 @@ if [[ "${SKIP_SETUP}" -eq 0 ]]; then
   "${SCRIPT_DIR}/setup_librispeech_test_clean.sh" --verify
 fi
 
-audio_args=(--check --write-manifest)
-if [[ "${SKIP_AUDIO_PROBE}" -eq 0 ]]; then
-  audio_args+=(--probe)
+if [[ "${SKIP_AUDIO_CHECK}" -eq 1 ]]; then
+  if [[ ! -f "${AUDIO_MANIFEST}" ]]; then
+    echo "error: --skip-audio-check requires an existing manifest at ${AUDIO_MANIFEST}" >&2
+    exit 1
+  fi
+else
+  audio_args=(--check --write-manifest)
+  if [[ "${SKIP_AUDIO_PROBE}" -eq 0 ]]; then
+    audio_args+=(--probe)
+  fi
+  "${SCRIPT_DIR}/validate_linux_virtual_audio.sh" "${audio_args[@]}" >/dev/null
 fi
-"${SCRIPT_DIR}/validate_linux_virtual_audio.sh" "${audio_args[@]}" >/dev/null
 
 CAPTURE_DEVICE="$(python3 - "${AUDIO_MANIFEST}" <<'PY'
 import json, sys

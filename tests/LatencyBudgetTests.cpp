@@ -89,6 +89,26 @@ void rejectsInvalidSampleRates()
     assert(threw);
 }
 
+double analysisContextMs(const AnalysisLatencySettings& settings)
+{
+    return settings.analysisWindowMs + settings.phonemeLookaheadMs;
+}
+
+void latencyPresetsMatchSpecAnalysisContextRanges()
+{
+    const auto low = LatencyBudgetCalculator::presetSettings(LatencyPreset::LowLatency);
+    const auto balanced = LatencyBudgetCalculator::presetSettings(LatencyPreset::Balanced);
+    const auto high = LatencyBudgetCalculator::presetSettings(LatencyPreset::HighAccuracy);
+
+    const double lowContext = analysisContextMs(low);
+    const double balancedContext = analysisContextMs(balanced);
+    const double highContext = analysisContextMs(high);
+
+    assert(lowContext >= 40.0 && lowContext <= 80.0);
+    assert(balancedContext >= 80.0 && balancedContext <= 140.0);
+    assert(highContext >= 140.0 && highContext <= 200.0);
+}
+
 } // namespace
 
 int main()
@@ -99,6 +119,7 @@ int main()
     customSettingsArePreserved();
     namesPresetsForUi();
     rejectsInvalidSampleRates();
+    latencyPresetsMatchSpecAnalysisContextRanges();
 
     std::cout << "LatencyBudget tests passed\n";
     return 0;
