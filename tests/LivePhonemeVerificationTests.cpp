@@ -166,6 +166,107 @@ void cliRejectsNonFiniteThresholds()
     assert(result.exitCode == LivePhonemeVerifyCliExitCode::Usage);
 }
 
+std::string onnxSampleLog()
+{
+    return "{\"kind\":\"session_start\",\"backend\":\"phoneme_onnx\","
+           "\"steady_ns\":1000000000,\"stream_time_seconds\":0.0}\n"
+           "{\"kind\":\"device_settings\",\"sample_rate_hz\":48000,"
+           "\"buffer_samples\":256,\"input_latency_samples\":128,"
+           "\"output_latency_samples\":128,\"input_buffer_samples\":256,"
+           "\"output_buffer_samples\":256}\n"
+           "{\"kind\":\"onnx\",\"t_stream\":1.15,\"steady_ns\":2200000000,"
+           "\"lag_ms\":25,\"ok\":true}\n"
+           "{\"kind\":\"ph_frame\",\"backend\":\"phoneme_onnx\","
+           "\"arpabet\":\"AE\",\"conf\":0.8,\"t0\":1.10,\"t1\":1.15,"
+           "\"steady_ns\":2200000000,\"vowel\":true,\"consonant\":false}\n";
+}
+
+void parsesOnnxLatencyLines()
+{
+    const auto parsed = parseLivePhonemeLogJsonl(onnxSampleLog());
+    assert(parsed.ok);
+    assert(parsed.log.sessionBackend == "phoneme_onnx");
+    assert(parsed.log.backendLatencies.size() == 1);
+    assert(parsed.log.backendLatencies[0].backend == "phoneme_onnx_async");
+    assert(parsed.log.backendLatencies[0].lagMs == 25.0);
+
+    const auto converted = convertLivePhonemeFrames(parsed.log, "onnx_phoneme");
+    assert(converted.size() == 1);
+    assert(converted[0].arpabet == "AE");
+}
+
+void computesE2eFromLatencyMeasure()
+{
+    std::string log = onnxSampleLog();
+    log += "{\"kind\":\"latency_measure\",\"valid\":true,"
+           "\"round_trip_ms\":80,\"estimate_ms\":120}\n";
+
+    const auto parsed = parseLivePhonemeLogJsonl(log);
+    assert(parsed.ok);
+    assert(parsed.log.hasLatencyMeasurement);
+    assert(parsed.log.latencyMeasurementValid);
+    assert(parsed.log.measuredRoundTripMs == 80.0);
+
+    LibriSpeechPlaybackPlan playback;
+    playback.playbackStartedSteadyNs = 2000000000;
+    playback.clips.push_back(
+        {"utt-1", "/tmp/utt-1.flac", 0.5, 0.0, 2000000000});
+    playback.totalDurationSeconds = 0.5;
+
+    const auto root = tempRoot();
+    const auto labels = root / "labels";
+    std::filesystem::create_directories(labels);
+    PhonemeFrame reference;
+    reference.arpabet = "AE";
+    reference.estimatedOnsetSeconds = 0.1;
+    reference.estimatedEndSeconds = 0.15;
+    std::string error;
+    assert(writePhonemeLabelJsonFile(labels / "utt-1.json", {reference}, error));
+
+    LiveVerificationGateOptions gates = passingGates();
+    gates.maxEndToEndLatencyMs = 1000.0;
+    const auto verified =
+        verifyLivePhonemeRun(parsed.log, playback, labels, "onnx_phoneme", gates);
+    assert(verified.ok);
+    assert(verified.report.latency.endToEndSource == "loopback_plus_decision_p95");
+    assert(verified.report.latency.endToEndMs > 80.0);
+    assert(verified.report.backend == "phoneme_onnx");
+
+    std::filesystem::remove_all(root);
+}
+
+void scoresMultiClipPlayback()
+{
+    const auto parsed = parseLivePhonemeLogJsonl(sampleLog());
+    assert(parsed.ok);
+
+    LibriSpeechPlaybackPlan playback;
+    playback.playbackStartedSteadyNs = 2000000000;
+    playback.clips.push_back(
+        {"utt-1", "/tmp/utt-1.flac", 0.5, 0.0, 2000000000});
+    playback.clips.push_back(
+        {"utt-2", "/tmp/utt-2.flac", 0.4, 1.0, 3000000000});
+    playback.totalDurationSeconds = 1.4;
+
+    const auto root = tempRoot();
+    const auto labels = root / "labels";
+    std::filesystem::create_directories(labels);
+    PhonemeFrame reference;
+    reference.arpabet = "K";
+    reference.estimatedOnsetSeconds = 0.1;
+    reference.estimatedEndSeconds = 0.15;
+    std::string error;
+    assert(writePhonemeLabelJsonFile(labels / "utt-1.json", {reference}, error));
+    assert(writePhonemeLabelJsonFile(labels / "utt-2.json", {reference}, error));
+
+    const auto verified =
+        verifyLivePhonemeRun(parsed.log, playback, labels, "pocketsphinx", passingGates());
+    assert(verified.ok);
+    assert(verified.report.utterances.size() == 2);
+
+    std::filesystem::remove_all(root);
+}
+
 } // namespace
 
 int main()
@@ -176,6 +277,9 @@ int main()
     rejectsPlaceholderAsPassingBackend();
     requiresTemporalGateConfiguration();
     cliRejectsNonFiniteThresholds();
+    parsesOnnxLatencyLines();
+    computesE2eFromLatencyMeasure();
+    scoresMultiClipPlayback();
     std::cout << "LivePhonemeVerification tests passed\n";
     return 0;
 }
