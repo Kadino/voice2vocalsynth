@@ -156,6 +156,24 @@ item []:
     assert(!parsed.ok);
 }
 
+void selfCompareYieldsPerfectF1()
+{
+    const auto fixture = repositoryRoot() / "tests/fixtures/mfa/sample_phones.TextGrid";
+    std::ifstream input(fixture, std::ios::binary);
+    assert(input);
+    std::ostringstream contents;
+    contents << input.rdbuf();
+
+    const auto parsed = parseMfaPhonesTextGrid(contents.str());
+    assert(parsed.ok);
+
+    const auto metrics = evaluatePhonemeFrames(parsed.frames, parsed.frames);
+    assert(metrics.matchedCount == parsed.frames.size());
+    assert(metrics.f1 == 1.0);
+    assert(metrics.missedCount == 0);
+    assert(metrics.falsePositiveCount == 0);
+}
+
 void rejectsEmptyPhoneIntervals()
 {
     const std::string textGrid = R"(File type = "ooTextFile"
@@ -193,6 +211,7 @@ int main()
     rejectsMalformedTextGrid();
     rejectsMissingPhonesTier();
     rejectsEmptyPhoneIntervals();
+    selfCompareYieldsPerfectF1();
     std::cout << "MfaLabelPipeline tests passed\n";
     return 0;
 }

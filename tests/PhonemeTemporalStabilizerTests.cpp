@@ -138,6 +138,72 @@ void low_confidence_frames_ignored()
     assert(!stab.try_pop_committed(frame));
 }
 
+void unvoiced_consonant_marked_not_voiced()
+{
+    PhonemeTemporalStabilizerOptions opt;
+    opt.min_segment_seconds = 0.04;
+    opt.silence_finalize_seconds = 0.05;
+    PhonemeTemporalStabilizer stab(opt);
+
+    for (int i = 0; i < 8; ++i) {
+        stab.observe({0.01 * static_cast<double>(i), "T", 0.9F});
+    }
+    for (int k = 0; k < 10; ++k) {
+        stab.observe({0.08 + 0.01 * static_cast<double>(k), "", 0.0F});
+    }
+
+    PhonemeFrame frame;
+    assert(stab.try_pop_committed(frame));
+    assert(frame.arpabet == "T");
+    assert(frame.isConsonant);
+    assert(!frame.isVoiced);
+}
+
+void out_of_order_observation_resets_state()
+{
+    PhonemeTemporalStabilizerOptions opt;
+    opt.min_segment_seconds = 0.04;
+    opt.silence_finalize_seconds = 0.05;
+    PhonemeTemporalStabilizer stab(opt);
+
+    for (int i = 0; i < 8; ++i) {
+        stab.observe({0.01 * static_cast<double>(i), "AH", 0.9F});
+    }
+    stab.observe({0.0, "EH", 0.9F});
+    for (int k = 0; k < 10; ++k) {
+        stab.observe({0.2 + 0.01 * static_cast<double>(k), "", 0.0F});
+    }
+
+    PhonemeFrame frame;
+    assert(!stab.try_pop_committed(frame));
+}
+
+void weak_competitor_blocked_by_hysteresis()
+{
+    PhonemeTemporalStabilizerOptions opt;
+    opt.min_segment_seconds = 0.04;
+    opt.candidate_stable_seconds = 0.08;
+    opt.silence_finalize_seconds = 0.05;
+    opt.min_observation_confidence = 0.5F;
+    opt.hysteresis_confidence_delta = 0.2F;
+    PhonemeTemporalStabilizer stab(opt);
+
+    for (int i = 0; i < 8; ++i) {
+        stab.observe({0.01 * static_cast<double>(i), "AH", 0.9F});
+    }
+    for (int i = 0; i < 12; ++i) {
+        stab.observe({0.08 + 0.01 * static_cast<double>(i), "EH", 0.55F});
+    }
+    for (int k = 0; k < 10; ++k) {
+        stab.observe({0.2 + 0.01 * static_cast<double>(k), "", 0.0F});
+    }
+
+    PhonemeFrame frame;
+    assert(stab.try_pop_committed(frame));
+    assert(frame.arpabet == "AH");
+    assert(!stab.try_pop_committed(frame));
+}
+
 } // namespace
 
 int main()
@@ -148,6 +214,9 @@ int main()
     rapid_label_flicker_keeps_first_stable_segment();
     reset_clears_pending_segments();
     low_confidence_frames_ignored();
+    unvoiced_consonant_marked_not_voiced();
+    out_of_order_observation_resets_state();
+    weak_competitor_blocked_by_hysteresis();
     std::cout << "PhonemeTemporalStabilizer tests passed\n";
     return 0;
 }

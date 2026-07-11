@@ -563,10 +563,15 @@ livePhonemeVerification:
           note: Dry-run paths covered by ScriptDryRunTests and LiveVerifyOrchestrationDryRunTests; full live orchestration remains manual
       partiallyCovered:
         - libriSpeechDatasetValidation
+          note: Negative validation and setup CLI paths covered by LibriSpeechDatasetTests and ScriptDryRunTests
         - mfaTextGridConversion
+          note: Self-compare perfect F1 covered by MfaLabelPipelineTests; live MFA alignment remains manual
         - linuxVirtualAudioFixtureParsing
+          note: Missing-sink and invalid-report parsing covered by LinuxVirtualAudioTests
         - postCaptureScoring
+          note: CLI exit 0/3 paths covered by LivePhonemeVerificationTests; live capture remains manual
         - phonemeTemporalStabilizerInIsolation
+          note: Hysteresis, voicing, and reset edge cases covered by PhonemeTemporalStabilizerTests
     phases:
       - id: phase0_bootstrap
         label: One-time dependency bootstrap
@@ -723,6 +728,7 @@ livePhonemeVerification:
       - done: compare_live_phoneme_backends_linux.sh --dry-run covered by ScriptDryRunTests
       - done: PhonemeFrame outputStructSpec contract tests (PhonemeFrameContractTests)
       - done: Latency preset analysis-context range checks in LatencyBudgetTests
+      - done: Extend partiallyCovered gaps (dataset validation negatives, MFA self-compare F1, virtual-audio fixture edges, scorer CLI exit codes, stabilizer hysteresis)
       - done: Headless Voice2VocalSynthLiveLogFixture for phases 5–7 (LiveLogFixtureTests LiveLogFixtureHarnessTests)
 ---
 

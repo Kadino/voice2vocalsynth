@@ -86,6 +86,19 @@ fi
 SETUP_BIN="${BUILD_DIR}/Voice2VocalSynthLibriSpeechSetup"
 if [[ -x "${SETUP_BIN}" ]]; then
   "${SETUP_BIN}" --verify --verify-root "${VERIFY_ROOT}" >/dev/null
+  setup_output="$("${SCRIPT_DIR}/setup_librispeech_test_clean.sh" --verify 2>&1)"
+  if ! printf '%s\n' "${setup_output}" | grep -q "flac files: 1"; then
+    echo "error: setup script verify did not report fixture dataset" >&2
+    printf '%s\n' "${setup_output}" >&2
+    exit 1
+  fi
+  manifest_output="$("${SCRIPT_DIR}/setup_librispeech_test_clean.sh" --manifest 2>&1)"
+  manifest_path="${VERIFY_ROOT}/datasets/LibriSpeech/librispeech-test-clean-manifest.json"
+  if [[ ! -f "${manifest_path}" ]]; then
+    echo "error: setup script manifest was not written" >&2
+    printf '%s\n' "${manifest_output}" >&2
+    exit 1
+  fi
 else
   echo "ScriptDryRunTests: skipped LibriSpeech setup verify (binary missing)"
 fi

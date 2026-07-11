@@ -602,4 +602,5 @@ Phase 0 Bootstrap
 - [x] Extend `LivePhonemeVerificationTests` for `latency_measure` and `onnx` log kinds
 - [x] `run_live_phoneme_verify_linux.sh` passes `-DVOICE2VOCALSYNTH_BUILD_JUCE_APP=ON` explicitly
 - [x] CI harness for `--dry-run` and fixture-based scorer (`ScriptDryRunTests`, `LiveLogFixtureHarnessTests`)
+- [x] Extend partiallyCovered local-test gaps (dataset negatives, MFA self-compare, virtual-audio edges, scorer CLI, stabilizer hysteresis)
 - [x] Headless `Voice2VocalSynthLiveLogFixture` for phases 5–7 (`LiveLogFixtureTests`)
