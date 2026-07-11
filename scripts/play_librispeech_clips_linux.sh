@@ -148,7 +148,7 @@ build_durations_tsv() {
 play_manifest() {
   local manifest_path="$1"
   python3 - <<'PY' "${manifest_path}" "${GAP_SECONDS}"
-import json, subprocess, sys, time
+import json, os, subprocess, sys, time
 
 manifest_path, gap_seconds = sys.argv[1], float(sys.argv[2])
 plan = json.load(open(manifest_path))
@@ -163,6 +163,12 @@ def output_args():
     raise SystemExit(f"unsupported route id: {route_id}")
 
 clips = plan["clips"]
+plan["playbackStartedSteadyNs"] = time.monotonic_ns()
+temporary_path = manifest_path + ".tmp"
+with open(temporary_path, "w", encoding="utf-8") as output:
+    json.dump(plan, output, indent=2)
+    output.write("\n")
+os.replace(temporary_path, manifest_path)
 for index, clip in enumerate(clips):
   flac = clip["flacPath"]
   cmd = ["ffmpeg", "-nostdin", "-loglevel", "error", "-re", "-i", flac, *output_args(), "-"]

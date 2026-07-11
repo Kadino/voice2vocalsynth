@@ -69,15 +69,17 @@ The repository currently contains the first phoneme mapping slice:
   latency mode, and recording/debug options.
 - Editable JSON preset import/export for the settings model. The UI can use the
   same model while users can still edit preset files by hand.
-- **`PhonemeTemporalStabilizer`** (`PhonemeTemporalObservation` → committed **`PhonemeFrame`** segments) with unit tests; JUCE live log includes **`ph_frame`** lines driven by a **pitch-gated placeholder** (testing) **in parallel** with optional **ONNX stub** jobs—this hybrid stays for exercising stabilizer boundaries and async inference without a real phoneme head yet.
+- **`PhonemeTemporalStabilizer`** (`PhonemeTemporalObservation` → committed **`PhonemeFrame`** segments) with unit tests; JUCE live logs include timestamped **`ph_frame`**, backend inference, and backend descriptor records.
 - **`IPhonemeBackend`** defines the swappable phoneme detection contract with a
   documented `PhonemeBackendDescriptor` (sample rate, window/hop, input kind,
   label inventory, confidence range, timestamp semantics);
   **`PlaceholderPitchPhonemeBackend`** implements the current pitch-gated `AH`
   debug path. **`PhonemeOnnxBackend`** adapts ONNX Runtime output into
   `PhonemeTemporalObservation` values using a sidecar `.phoneme.json` model
-  config. **`PhonemeEvaluation`** provides initial precision/recall/F1
-  and onset-error metrics (including P95 onset error and consonant miss rates) for
+  config. **`PocketSphinxPhonemeBackend`** is a true incremental, direct-ARPABET
+  baseline using PocketSphinx 5.1.1's BSD-licensed US-English all-phone model.
+  **`PhonemeEvaluation`** provides precision/recall/F1, onset/end/duration,
+  consonant miss, and confusion metrics for
   comparing backends against labeled frames. The **`Voice2VocalSynthPhonemeEval`**
   CLI runs those metrics outside unit tests. **`Voice2VocalSynthPhonemeBakeoff`**
   compares backends on private eval WAV/label pairs with raw and stabilized scores.
@@ -85,8 +87,12 @@ The repository currently contains the first phoneme mapping slice:
   `~/.local/share/Voice2VocalSynth/EvalData` on Linux).
 - **`StreamingLiveRenderer`** schedules per-phoneme offline renders into a buffered
   playback mix. The JUCE shell exposes switchable live phoneme backends
-  (`placeholder` / `onnx_phoneme`), persists choices in `shell_settings.json`, and
+  (`placeholder` / `onnx_phoneme` / `pocketsphinx`), persists choices in `shell_settings.json`, and
   can mix live synthesis output when a voicebank is configured.
+- **`scripts/run_live_phoneme_verify_linux.sh`** performs the formal 1.0x
+  LibriSpeech live-path run and writes predictions, metrics, and a gated Markdown
+  report. **`scripts/compare_live_phoneme_backends_linux.sh`** repeats that live
+  run per backend and ranks only captured results.
 - **`WhistleDetector`** (Goertzel HNR-style proxy) runs in parallel with phoneme ONNX; live log emits `whistle` / `whistle_edge` JSON and bypasses the phoneme stabilizer placeholder while whistle mode is active.
 - **`VoiceActivityDetector`** emits timestamped **`speech_onset`** / **`speech_end`** on the stream clock; the JUCE live log records them as **`vad`** JSON.
 - **`InferenceLatencyTracker`** maintains a clamped moving estimate of ONNX queue+inference lag; shell **`onnx`** lines include `lag_ms` and `lag_est_ms`.
@@ -96,7 +102,8 @@ The repository currently contains the first phoneme mapping slice:
 
 ## Build
 
-Requires CMake **3.22+** (JUCE’s build scripts). The **Voice2VocalSynth** target is a JUCE standalone shell
+Requires CMake **3.22+**, or **3.25+** when the default PocketSphinx dependency
+is enabled. The **Voice2VocalSynth** target is a JUCE standalone shell
 (Windows). To skip fetching JUCE (core library and tests only), configure with
 `-DVOICE2VOCALSYNTH_BUILD_JUCE_APP=OFF`. To skip ONNX Runtime (stub phoneme runner
 only), use `-DVOICE2VOCALSYNTH_WITH_ONNX=OFF`. On hosts where auto-download is not
@@ -104,6 +111,9 @@ implemented (for example non-x64), set `VOICE2VOCALSYNTH_ONNXRUNTIME_ROOT` to an
 extracted official ONNX Runtime tree (`include/` + `lib/`). Override the checked-in
 phoneme test fixture path with `-DVOICE2VOCALSYNTH_PHONEME_REPOSITORY_FIXTURE=...`
 when pointing presets at a different `.onnx` file for development.
+PocketSphinx 5.1.1 is fetched with a pinned archive hash by default; disable it
+with `-DVOICE2VOCALSYNTH_WITH_POCKETSPHINX=OFF`, or override its model directory
+with `-DVOICE2VOCALSYNTH_POCKETSPHINX_MODEL_ROOT=...`.
 
 ```sh
 cmake -S . -B build

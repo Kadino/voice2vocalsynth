@@ -24,12 +24,37 @@ void parsesExportFlags()
         "--live-log-export",
         "--live-log-out",
         "/tmp/custom/live-log.jsonl",
+        "--phoneme-backend",
+        "pocketsphinx",
+        "--pocketsphinx-model-root",
+        "/tmp/model",
+        "--capture-device",
+        "LivePhonemeVerify.monitor",
+        "--quit-after-seconds",
+        "20",
+        "--auto-loopback-measure",
     };
     const auto options = parseShellLiveLogExportArgs(args, error);
     assert(options);
     assert(options->enabled);
     assert(options->outputOverride == "/tmp/custom/live-log.jsonl");
+    assert(options->phonemeBackend == "pocketsphinx");
+    assert(options->pocketSphinxModelRoot == "/tmp/model");
+    assert(options->captureDevice == "LivePhonemeVerify.monitor");
+    assert(options->quitAfterSeconds == 20.0);
+    assert(options->autoLoopbackMeasure);
     assert(error.empty());
+}
+
+void rejectsInvalidAutomationOptions()
+{
+    std::string error;
+    assert(!parseShellLiveLogExportArgs(
+        {"Voice2VocalSynthApp", "--phoneme-backend", "unknown"}, error));
+    assert(!error.empty());
+    assert(!parseShellLiveLogExportArgs(
+        {"Voice2VocalSynthApp", "--quit-after-seconds", "0"}, error));
+    assert(!error.empty());
 }
 
 void rejectsOutputWithoutExport()
@@ -68,6 +93,7 @@ int main()
     parsesExportFlags();
     rejectsOutputWithoutExport();
     resolvesOverrideFilePath();
+    rejectsInvalidAutomationOptions();
     std::cout << "ShellCli tests passed\n";
     return 0;
 }

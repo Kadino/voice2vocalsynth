@@ -3,6 +3,7 @@
 #include <cctype>
 #include <cmath>
 #include <fstream>
+#include <optional>
 #include <sstream>
 
 namespace Voice2VocalSynth
@@ -64,6 +65,117 @@ namespace
         lines.push_back(line);
     }
     return lines;
+}
+
+[[nodiscard]] std::size_t valuePosition(std::string_view json, std::string_view key)
+{
+    const auto keyPosition = json.find("\"" + std::string(key) + "\"");
+    if (keyPosition == std::string_view::npos) {
+        return std::string_view::npos;
+    }
+    auto position = json.find(':', keyPosition + key.size() + 2);
+    if (position == std::string_view::npos) {
+        return position;
+    }
+    ++position;
+    while (position < json.size() &&
+           std::isspace(static_cast<unsigned char>(json[position]))) {
+        ++position;
+    }
+    return position;
+}
+
+[[nodiscard]] std::optional<std::string> jsonString(std::string_view json,
+                                                    std::string_view key)
+{
+    auto position = valuePosition(json, key);
+    if (position == std::string_view::npos || position >= json.size() || json[position] != '"') {
+        return std::nullopt;
+    }
+    ++position;
+    std::string value;
+    bool escaped = false;
+    for (; position < json.size(); ++position) {
+        const char character = json[position];
+        if (escaped) {
+            switch (character) {
+            case 'n': value.push_back('\n'); break;
+            case 'r': value.push_back('\r'); break;
+            case 't': value.push_back('\t'); break;
+            default: value.push_back(character); break;
+            }
+            escaped = false;
+        } else if (character == '\\') {
+            escaped = true;
+        } else if (character == '"') {
+            return value;
+        } else {
+            value.push_back(character);
+        }
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] std::optional<double> jsonNumber(std::string_view json,
+                                               std::string_view key)
+{
+    const auto position = valuePosition(json, key);
+    if (position == std::string_view::npos) {
+        return std::nullopt;
+    }
+    std::size_t end = position;
+    while (end < json.size() &&
+           (std::isdigit(static_cast<unsigned char>(json[end])) || json[end] == '-' ||
+            json[end] == '+' || json[end] == '.' || json[end] == 'e' || json[end] == 'E')) {
+        ++end;
+    }
+    try {
+        return std::stod(std::string(json.substr(position, end - position)));
+    } catch (const std::exception&) {
+        return std::nullopt;
+    }
+}
+
+[[nodiscard]] std::vector<std::string_view> jsonObjectArray(std::string_view json,
+                                                            std::string_view key)
+{
+    std::vector<std::string_view> objects;
+    auto position = valuePosition(json, key);
+    if (position == std::string_view::npos || position >= json.size() || json[position] != '[') {
+        return objects;
+    }
+    bool inString = false;
+    bool escaped = false;
+    int depth = 0;
+    std::size_t objectStart = std::string_view::npos;
+    for (++position; position < json.size(); ++position) {
+        const char character = json[position];
+        if (inString) {
+            if (escaped) {
+                escaped = false;
+            } else if (character == '\\') {
+                escaped = true;
+            } else if (character == '"') {
+                inString = false;
+            }
+            continue;
+        }
+        if (character == '"') {
+            inString = true;
+        } else if (character == '{') {
+            if (depth++ == 0) {
+                objectStart = position;
+            }
+        } else if (character == '}') {
+            if (--depth == 0 && objectStart != std::string_view::npos) {
+                objects.push_back(json.substr(objectStart, position - objectStart + 1));
+                objectStart = std::string_view::npos;
+            }
+        } else if (character == ']' && depth == 0) {
+            break;
+        }
+    }
+    return objects;
 }
 
 } // namespace
@@ -190,6 +302,7 @@ bool writeLibriSpeechPlaybackManifest(const LibriSpeechPlaybackPlan& plan,
     json << "  \"playbackDevice\": \"" << jsonEscape(plan.playbackDevice) << "\",\n";
     json << "  \"gapSeconds\": " << plan.gapSeconds << ",\n";
     json << "  \"totalDurationSeconds\": " << plan.totalDurationSeconds << ",\n";
+    json << "  \"playbackStartedSteadyNs\": " << plan.playbackStartedSteadyNs << ",\n";
     json << "  \"runDirectory\": \"" << jsonEscape(plan.runDirectory.string()) << "\",\n";
     json << "  \"clips\": [\n";
     for (std::size_t index = 0; index < plan.clips.size(); ++index) {
@@ -208,6 +321,63 @@ bool writeLibriSpeechPlaybackManifest(const LibriSpeechPlaybackPlan& plan,
     json << "}\n";
     output << json.str();
     return static_cast<bool>(output);
+}
+
+LibriSpeechPlaybackManifestLoadResult parseLibriSpeechPlaybackManifest(
+    std::string_view json)
+{
+    LibriSpeechPlaybackManifestLoadResult result;
+    const auto route = jsonString(json, "routeId");
+    const auto playback = jsonString(json, "playbackDevice");
+    const auto gap = jsonNumber(json, "gapSeconds");
+    const auto duration = jsonNumber(json, "totalDurationSeconds");
+    if (!route || !playback || !gap || !duration) {
+        result.error = "Playback manifest is missing route or timing fields";
+        return result;
+    }
+    result.plan.routeId = *route;
+    result.plan.playbackDevice = *playback;
+    result.plan.gapSeconds = *gap;
+    result.plan.totalDurationSeconds = *duration;
+    if (const auto runDirectory = jsonString(json, "runDirectory")) {
+        result.plan.runDirectory = *runDirectory;
+    }
+    if (const auto started = jsonNumber(json, "playbackStartedSteadyNs")) {
+        result.plan.playbackStartedSteadyNs = static_cast<std::int64_t>(*started);
+    }
+
+    for (const auto object : jsonObjectArray(json, "clips")) {
+        const auto id = jsonString(object, "utteranceId");
+        const auto flac = jsonString(object, "flacPath");
+        const auto clipDuration = jsonNumber(object, "durationSeconds");
+        const auto offset = jsonNumber(object, "startOffsetSeconds");
+        if (!id || !flac || !clipDuration || !offset || id->empty() || *clipDuration <= 0.0) {
+            result.error = "Playback manifest contains an invalid clip";
+            result.plan.clips.clear();
+            return result;
+        }
+        result.plan.clips.push_back({*id, *flac, *clipDuration, *offset});
+    }
+    if (result.plan.clips.empty()) {
+        result.error = "Playback manifest contains no clips";
+        return result;
+    }
+    result.ok = true;
+    return result;
+}
+
+LibriSpeechPlaybackManifestLoadResult loadLibriSpeechPlaybackManifest(
+    const std::filesystem::path& manifestPath)
+{
+    std::ifstream input(manifestPath, std::ios::binary);
+    if (!input) {
+        LibriSpeechPlaybackManifestLoadResult result;
+        result.error = "Unable to open playback manifest: " + manifestPath.string();
+        return result;
+    }
+    std::ostringstream contents;
+    contents << input.rdbuf();
+    return parseLibriSpeechPlaybackManifest(contents.str());
 }
 
 } // namespace Voice2VocalSynth

@@ -4,6 +4,7 @@
 #include "Voice2VocalSynth/LinuxVirtualAudio.h"
 
 #include <filesystem>
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -29,6 +30,7 @@ struct LibriSpeechPlaybackPlan
     std::string playbackDevice;
     std::string routeId;
     std::filesystem::path runDirectory;
+    std::int64_t playbackStartedSteadyNs = 0;
 };
 
 struct LibriSpeechPlaybackDurationEntry
@@ -38,6 +40,13 @@ struct LibriSpeechPlaybackDurationEntry
 };
 
 struct LibriSpeechPlaybackBuildResult
+{
+    bool ok = false;
+    LibriSpeechPlaybackPlan plan;
+    std::string error;
+};
+
+struct LibriSpeechPlaybackManifestLoadResult
 {
     bool ok = false;
     LibriSpeechPlaybackPlan plan;
@@ -63,5 +72,11 @@ struct LibriSpeechPlaybackBuildResult
 [[nodiscard]] bool writeLibriSpeechPlaybackManifest(const LibriSpeechPlaybackPlan& plan,
                                                     const std::filesystem::path& manifestPath,
                                                     std::string& error);
+
+[[nodiscard]] LibriSpeechPlaybackManifestLoadResult parseLibriSpeechPlaybackManifest(
+    std::string_view json);
+
+[[nodiscard]] LibriSpeechPlaybackManifestLoadResult loadLibriSpeechPlaybackManifest(
+    const std::filesystem::path& manifestPath);
 
 } // namespace Voice2VocalSynth

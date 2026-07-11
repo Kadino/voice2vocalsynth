@@ -40,6 +40,8 @@ void scoresMatchedFrames()
     assert(nearlyEqual(metrics.recall, 1.0));
     assert(nearlyEqual(metrics.f1, 1.0));
     assert(nearlyEqual(metrics.meanAbsoluteOnsetErrorMs, 10.0));
+    assert(nearlyEqual(metrics.meanAbsoluteEndErrorMs, 10.0));
+    assert(nearlyEqual(metrics.meanAbsoluteDurationErrorMs, 0.0));
 }
 
 void rejectsWrongLabelsAndLateOnsets()
@@ -56,6 +58,7 @@ void rejectsWrongLabelsAndLateOnsets()
     assert(metrics.falsePositiveCount == 2);
     assert(metrics.precision == 0.0);
     assert(metrics.recall == 0.0);
+    assert(metrics.confusionCounts.at("K->T") == 1);
 }
 
 void handlesPartialMatches()
@@ -69,6 +72,7 @@ void handlesPartialMatches()
     assert(metrics.falsePositiveCount == 0);
     assert(nearlyEqual(metrics.precision, 1.0));
     assert(nearlyEqual(metrics.recall, 2.0 / 3.0));
+    assert(nearlyEqual(metrics.missedRate, 1.0 / 3.0));
 }
 
 std::filesystem::path tempJsonPath()
@@ -123,6 +127,7 @@ void exportsMetricsJsonReport()
     assert(json.find("\"matchedCount\": 1") != std::string::npos);
     assert(json.find("\"precision\": 1.000000") != std::string::npos);
     assert(json.find("\"meanAbsoluteOnsetErrorMs\": 10.000000") != std::string::npos);
+    assert(json.find("\"meanAbsoluteEndErrorMs\": 10.000000") != std::string::npos);
 }
 
 void rejectsMalformedLabelJson()

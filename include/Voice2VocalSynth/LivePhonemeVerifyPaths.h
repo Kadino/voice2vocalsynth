@@ -19,6 +19,10 @@ struct LivePhonemeVerifyRunPaths
     std::filesystem::path runDirectory;
     std::filesystem::path liveLog;
     std::filesystem::path manifest;
+    std::filesystem::path playbackManifest;
+    std::filesystem::path predictions;
+    std::filesystem::path metrics;
+    std::filesystem::path report;
 };
 
 /// Default verification data root, e.g. `~/.local/share/Voice2VocalSynth/LivePhonemeVerify`.
@@ -36,6 +40,9 @@ struct LivePhonemeVerifyRunPaths
 [[nodiscard]] bool createLivePhonemeVerifyRun(const std::filesystem::path& root,
                                               LivePhonemeVerifyRunPaths& out,
                                               std::string& error);
+
+[[nodiscard]] LivePhonemeVerifyRunPaths livePhonemeVerifyRunPaths(
+    const std::filesystem::path& runDirectory);
 
 /// Writes the initial run manifest. `liveLogPath` is stored relative to `runDirectory` when possible.
 [[nodiscard]] bool writeLivePhonemeVerifyManifest(const LivePhonemeVerifyRunPaths& paths,

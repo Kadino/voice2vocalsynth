@@ -36,7 +36,9 @@ public:
         }
 
         std::string error;
+        Voice2VocalSynth::ShellLiveLogExportOptions launchOptions;
         if (const auto options = Voice2VocalSynth::parseShellLiveLogExportArgs(args, error)) {
+            launchOptions = *options;
             if (options->enabled) {
                 Voice2VocalSynth::ShellLiveLogExportPaths paths;
                 if (!Voice2VocalSynth::resolveShellLiveLogExportPaths(*options, paths, error)) {
@@ -50,7 +52,9 @@ public:
             juce::Logger::writeToLog("Voice2VocalSynth: " + juce::String(error));
         }
 
-        mainWindow = std::make_unique<MainWindow>(getApplicationName(), std::move(liveLogExportPaths));
+        mainWindow = std::make_unique<MainWindow>(getApplicationName(),
+                                                  std::move(launchOptions),
+                                                  std::move(liveLogExportPaths));
     }
 
     void shutdown() override
@@ -63,6 +67,7 @@ private:
     {
     public:
         explicit MainWindow(const juce::String& name,
+                            Voice2VocalSynth::ShellLiveLogExportOptions launchOptions,
                             std::optional<Voice2VocalSynth::ShellLiveLogExportPaths> liveLogExportPaths)
             : DocumentWindow(name,
                              juce::Desktop::getInstance().getDefaultLookAndFeel().findColour(
@@ -70,7 +75,9 @@ private:
                              juce::DocumentWindow::minimiseButton | juce::DocumentWindow::closeButton)
         {
             setUsingNativeTitleBar(true);
-            setContentOwned(new MainComponent(std::move(liveLogExportPaths)), true);
+            setContentOwned(new MainComponent(std::move(launchOptions),
+                                              std::move(liveLogExportPaths)),
+                            true);
             setResizable(true, true);
             setResizeLimits(420, 380, 10000, 10000);
             centreWithSize(getWidth(), getHeight());

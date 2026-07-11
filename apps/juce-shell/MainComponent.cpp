@@ -49,6 +49,22 @@ namespace
     return appDataRootDirectory().getChildFile("shell_settings.json");
 }
 
+[[nodiscard]] std::string jsonEscape(std::string_view text)
+{
+    std::string out;
+    for (const char character : text) {
+        switch (character) {
+        case '\\': out += "\\\\"; break;
+        case '"': out += "\\\""; break;
+        case '\n': out += "\\n"; break;
+        case '\r': out += "\\r"; break;
+        case '\t': out += "\\t"; break;
+        default: out.push_back(character); break;
+        }
+    }
+    return out;
+}
+
 [[nodiscard]] std::vector<std::string> parseArpabetTokens(const juce::String& text)
 {
     std::vector<std::string> out;
@@ -121,8 +137,10 @@ std::string liveTimelineLogLine(const std::string& arpabet, const std::string& t
 } // namespace
 
 MainComponent::MainComponent(
+    Voice2VocalSynth::ShellLiveLogExportOptions launchOptions,
     std::optional<Voice2VocalSynth::ShellLiveLogExportPaths> liveLogExportPaths)
-    : liveLogExportPaths_(std::move(liveLogExportPaths))
+    : launchOptions_(std::move(launchOptions)),
+      liveLogExportPaths_(std::move(liveLogExportPaths))
 {
     titleLabel_.setText("Voice2VocalSynth — JUCE shell", juce::dontSendNotification);
     titleLabel_.setFont(juce::Font(juce::FontOptions(20.0f, juce::Font::bold)));
@@ -168,9 +186,6 @@ MainComponent::MainComponent(
     offlineNoteEditor_.setMultiLine(false);
     offlineNoteEditor_.setTextToShowWhenEmpty("C4", juce::Colours::grey);
     addAndMakeVisible(offlineNoteEditor_);
-
-    loadShellSettingsFromDisk();
-    rebuildActivePhonemeBackend();
 
     latencyPresetCombo_.onChange = [this] {
         const int id = latencyPresetCombo_.getSelectedId();
@@ -221,6 +236,9 @@ MainComponent::MainComponent(
 #if defined(VOICE2VOCALSYNTH_WITH_ONNX)
     livePhonemeBackendCombo_.addItem("ONNX phoneme backend", 2);
 #endif
+#if defined(VOICE2VOCALSYNTH_WITH_POCKETSPHINX)
+    livePhonemeBackendCombo_.addItem("PocketSphinx all-phone", 3);
+#endif
     livePhonemeBackendCombo_.onChange = [this] {
         rebuildActivePhonemeBackend();
         saveShellSettings();
@@ -258,6 +276,28 @@ MainComponent::MainComponent(
         juce::FontOptions(juce::Font::getDefaultMonospacedFontName(), 12.0f, juce::Font::plain)));
     addAndMakeVisible(livePipelineLog_);
 
+    loadShellSettingsFromDisk();
+    if (launchOptions_.onnxModelPath) {
+        phonemeOnnxUseRepositoryFixture_ = false;
+        phonemeOnnxModelPath_ = launchOptions_.onnxModelPath->string();
+    }
+    if (launchOptions_.onnxConfigPath) {
+        phonemeOnnxConfigPath_ = launchOptions_.onnxConfigPath->string();
+    }
+    if (launchOptions_.pocketSphinxModelRoot) {
+        pocketSphinxModelRoot_ = launchOptions_.pocketSphinxModelRoot->string();
+    }
+    if (launchOptions_.phonemeBackend) {
+        const auto& backend = *launchOptions_.phonemeBackend;
+        livePhonemeBackendCombo_.setSelectedId(backend == "onnx_phoneme" ? 2 :
+                                                  backend == "pocketsphinx" ? 3 : 1,
+                                              juce::dontSendNotification);
+    }
+    if (livePhonemeBackendCombo_.getSelectedId() == 0) {
+        livePhonemeBackendCombo_.setSelectedId(1, juce::dontSendNotification);
+    }
+    rebuildActivePhonemeBackend();
+
     std::unique_ptr<juce::XmlElement> savedAudioState;
     {
         const auto f = audioDeviceSettingsFile();
@@ -267,6 +307,15 @@ MainComponent::MainComponent(
     }
 
     deviceManager.initialise(2, 2, savedAudioState.get(), true);
+    if (launchOptions_.captureDevice) {
+        auto setup = deviceManager.getAudioDeviceSetup();
+        setup.inputDeviceName = juce::String(*launchOptions_.captureDevice);
+        const auto setupError = deviceManager.setAudioDeviceSetup(setup, true);
+        if (setupError.isNotEmpty()) {
+            juce::Logger::writeToLog("Voice2VocalSynth: capture device selection failed: " +
+                                     setupError);
+        }
+    }
     deviceManager.addChangeListener(this);
     deviceManager.addAudioCallback(this);
 
@@ -274,6 +323,10 @@ MainComponent::MainComponent(
     startTimerHz(15);
     refreshLatencyDisplay();
     initializeLiveLogExport();
+    logDeviceSettings(deviceManager.getCurrentAudioDevice());
+    if (launchOptions_.autoLoopbackMeasure) {
+        beginLoopbackMeasurement();
+    }
 }
 
 MainComponent::~MainComponent()
@@ -435,6 +488,9 @@ void MainComponent::audioDeviceAboutToStart(juce::AudioIODevice* device)
     phonemeThrottleCounter_ = 0;
     pitchTracker_.clear();
     phonemeStabilizer_.reset();
+    if (auto* backend = activePhonemeBackend()) {
+        backend->reset();
+    }
     voiceVad_.reset();
     whistleDetector_.reset();
     inferenceLatency_.reset();
@@ -475,6 +531,15 @@ void MainComponent::timerCallback()
 {
     refreshLatencyDisplay();
     livePipelineTimerTick();
+    if (!timedQuitRequested_ && launchOptions_.quitAfterSeconds) {
+        const double elapsed = std::chrono::duration<double>(
+                                   std::chrono::steady_clock::now() - launchSteadyTime_)
+                                   .count();
+        if (elapsed >= *launchOptions_.quitAfterSeconds) {
+            timedQuitRequested_ = true;
+            juce::JUCEApplication::getInstance()->systemRequestedQuit();
+        }
+    }
 }
 
 void MainComponent::changeListenerCallback(juce::ChangeBroadcaster* source)
@@ -502,8 +567,10 @@ void MainComponent::saveShellSettings()
     obj->setProperty("offlinePhonemes", offlinePhonemesEditor_.getText());
     obj->setProperty("offlineNote", offlineNoteEditor_.getText());
     obj->setProperty("liveOnnxStub", liveOnnxToggle_.getToggleState());
+    const int backendId = livePhonemeBackendCombo_.getSelectedId();
     obj->setProperty("livePhonemeBackend",
-                      livePhonemeBackendCombo_.getSelectedId() == 2 ? "onnx_phoneme" : "placeholder");
+                     backendId == 2 ? "onnx_phoneme" :
+                         backendId == 3 ? "pocketsphinx" : "placeholder");
     obj->setProperty("liveSynthesisEnabled", liveSynthesisToggle_.getToggleState());
     obj->setProperty("liveVoicebankPath", liveVoicebankPath_);
     obj->setProperty("evalDataFolder", evalDataFolderPath_);
@@ -511,6 +578,7 @@ void MainComponent::saveShellSettings()
     obj->setProperty("phonemeOnnxUseRepositoryFixture", phonemeOnnxUseRepositoryFixture_);
     obj->setProperty("phonemeOnnxModelPath", phonemeOnnxModelPath_);
     obj->setProperty("phonemeOnnxConfigPath", phonemeOnnxConfigPath_);
+    obj->setProperty("pocketSphinxModelRoot", pocketSphinxModelRoot_);
 
     const auto f = shellSettingsFile();
     (void)f.getParentDirectory().createDirectory();
@@ -572,7 +640,9 @@ void MainComponent::loadShellSettingsFromDisk()
     }
     if (parsed.hasProperty("livePhonemeBackend")) {
         const juce::String backend = parsed.getProperty("livePhonemeBackend", "placeholder").toString();
-        livePhonemeBackendCombo_.setSelectedId(backend == "onnx_phoneme" ? 2 : 1, juce::dontSendNotification);
+        livePhonemeBackendCombo_.setSelectedId(backend == "onnx_phoneme" ? 2 :
+                                                  backend == "pocketsphinx" ? 3 : 1,
+                                              juce::dontSendNotification);
     }
     if (parsed.hasProperty("liveSynthesisEnabled")) {
         liveSynthesisToggle_.setToggleState(static_cast<bool>(parsed.getProperty("liveSynthesisEnabled", false)),
@@ -598,6 +668,9 @@ void MainComponent::loadShellSettingsFromDisk()
     }
     if (parsed.hasProperty("phonemeOnnxConfigPath")) {
         phonemeOnnxConfigPath_ = parsed.getProperty("phonemeOnnxConfigPath", {}).toString();
+    }
+    if (parsed.hasProperty("pocketSphinxModelRoot")) {
+        pocketSphinxModelRoot_ = parsed.getProperty("pocketSphinxModelRoot", {}).toString();
     }
 
     {
@@ -651,12 +724,40 @@ void MainComponent::initializeLiveLogExport()
 
     liveLogExportReady_ = true;
     const char* backendName = activePhonemeBackend() ? activePhonemeBackend()->name() : "none";
+    const auto sessionSteadyNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                     std::chrono::steady_clock::now().time_since_epoch())
+                                     .count();
+    const double sessionStreamSeconds =
+        liveSampleRateHz_ > 0.0
+            ? static_cast<double>(liveSamplesSeen_.load(std::memory_order_relaxed)) /
+                  liveSampleRateHz_
+            : 0.0;
     std::ostringstream session;
     session << "{\"kind\":\"session_start\",\"live_log_export\":true"
-            << ",\"run_directory\":\"" << liveLogExportPaths_->runPaths.runDirectory.string() << "\""
-            << ",\"manifest\":\"" << liveLogExportPaths_->runPaths.manifest.string() << "\""
-            << ",\"backend\":\"" << backendName << "\"}";
+            << ",\"run_directory\":\"" << jsonEscape(liveLogExportPaths_->runPaths.runDirectory.string()) << "\""
+            << ",\"manifest\":\"" << jsonEscape(liveLogExportPaths_->runPaths.manifest.string()) << "\""
+            << ",\"backend\":\"" << backendName << "\""
+            << ",\"steady_ns\":" << sessionSteadyNs
+            << ",\"stream_time_seconds\":" << sessionStreamSeconds << "}";
     pushLiveLogLine(session.str());
+
+    if (auto* backend = activePhonemeBackend()) {
+        const auto descriptor = backend->descriptor();
+        std::ostringstream line;
+        line << "{\"kind\":\"backend_descriptor\",\"backend\":\""
+             << jsonEscape(descriptor.backendName) << "\",\"sample_rate_hz\":"
+             << descriptor.sampleRateHz << ",\"window_ms\":" << descriptor.windowMs
+             << ",\"hop_ms\":" << descriptor.hopMs << ",\"timestamp_semantics\":\""
+             << jsonEscape(descriptor.timestampSemantics) << "\",\"labels\":[";
+        for (std::size_t index = 0; index < descriptor.labels.size(); ++index) {
+            if (index > 0) {
+                line << ',';
+            }
+            line << '"' << jsonEscape(descriptor.labels[index]) << '"';
+        }
+        line << "]}";
+        pushLiveLogLine(line.str());
+    }
 }
 
 void MainComponent::appendLiveLogExportLine(const std::string& line)
@@ -681,6 +782,7 @@ void MainComponent::logDeviceSettings(juce::AudioIODevice* device)
     settings.setf(std::ios::fixed);
     settings.precision(3);
     settings << "{\"kind\":\"device_settings\""
+             << ",\"device_name\":\"" << jsonEscape(device->getName().toStdString()) << "\""
              << ",\"sample_rate_hz\":" << latency.sampleRateHz
              << ",\"buffer_samples\":" << device->getCurrentBufferSizeSamples()
              << ",\"input_latency_samples\":" << latency.inputDeviceLatencySamples
@@ -818,6 +920,22 @@ void MainComponent::livePipelineTimerTick()
         backendFrame.streamTimeStartSeconds = streamSec - (static_cast<double>(win) / liveSampleRateHz_);
         if (auto* backend = activePhonemeBackend()) {
             const auto backendResult = backend->process(backendFrame);
+            const auto completedSteadyNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                               std::chrono::steady_clock::now().time_since_epoch())
+                                               .count();
+            std::ostringstream backendLog;
+            backendLog.setf(std::ios::fixed);
+            backendLog.precision(5);
+            backendLog << "{\"kind\":\"backend_inference\",\"backend\":\""
+                       << backend->name() << "\",\"t_stream\":" << streamSec
+                       << ",\"steady_ns\":" << completedSteadyNs
+                       << ",\"ok\":" << (backendResult.ok ? "true" : "false")
+                       << ",\"lag_ms\":" << backendResult.backendLatencyMs;
+            if (!backendResult.error.empty()) {
+                backendLog << ",\"error\":\"" << jsonEscape(backendResult.error) << "\"";
+            }
+            backendLog << "}";
+            pushLiveLogLine(backendLog.str());
             if (backendResult.ok) {
                 for (const auto& ob : backendResult.observations) {
                     phonemeStabilizer_.observe(ob);
@@ -1133,8 +1251,24 @@ void MainComponent::rebuildActivePhonemeBackend()
             livePhonemeBackendCombo_.setSelectedId(1, juce::dontSendNotification);
         }
     }
-#else
-    juce::ignoreUnused(this);
+#endif
+#if defined(VOICE2VOCALSYNTH_WITH_POCKETSPHINX)
+    pocketSphinxBackend_.reset();
+    if (livePhonemeBackendCombo_.getSelectedId() == 3) {
+        Voice2VocalSynth::PocketSphinxPhonemeBackendOptions options;
+        if (pocketSphinxModelRoot_.isNotEmpty()) {
+            options.modelRoot = std::filesystem::path(pocketSphinxModelRoot_.toStdString());
+        }
+        pocketSphinxBackend_ =
+            std::make_unique<Voice2VocalSynth::PocketSphinxPhonemeBackend>(std::move(options));
+        std::string error;
+        if (!pocketSphinxBackend_->load(error)) {
+            juce::Logger::writeToLog("Voice2VocalSynth: PocketSphinx backend load failed: " +
+                                     juce::String(error.c_str()));
+            pocketSphinxBackend_.reset();
+            livePhonemeBackendCombo_.setSelectedId(1, juce::dontSendNotification);
+        }
+    }
 #endif
 }
 
@@ -1143,6 +1277,12 @@ Voice2VocalSynth::IPhonemeBackend* MainComponent::activePhonemeBackend()
 #if defined(VOICE2VOCALSYNTH_WITH_ONNX)
     if (livePhonemeBackendCombo_.getSelectedId() == 2 && phonemeOnnxBackend_ && phonemeOnnxBackend_->loaded()) {
         return phonemeOnnxBackend_.get();
+    }
+#endif
+#if defined(VOICE2VOCALSYNTH_WITH_POCKETSPHINX)
+    if (livePhonemeBackendCombo_.getSelectedId() == 3 && pocketSphinxBackend_ &&
+        pocketSphinxBackend_->loaded()) {
+        return pocketSphinxBackend_.get();
     }
 #endif
     return &placeholderPhonemeBackend_;

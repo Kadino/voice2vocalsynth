@@ -353,9 +353,15 @@ PhonemeEvaluationMetrics evaluatePhonemeFrames(
 
     std::vector<bool> predictionUsed(prediction.size(), false);
     double onsetErrorSumSeconds = 0.0;
+    double endErrorSumSeconds = 0.0;
+    double durationErrorSumSeconds = 0.0;
     std::vector<double> matchedOnsetErrorsSeconds;
+    std::vector<double> matchedEndErrorsSeconds;
+    std::vector<double> matchedDurationErrorsSeconds;
+    std::vector<std::size_t> missedReferenceIndices;
 
-    for (const auto& ref : reference) {
+    for (std::size_t referenceIndex = 0; referenceIndex < reference.size(); ++referenceIndex) {
+        const auto& ref = reference[referenceIndex];
         if (phonemeFrameIsConsonant(ref)) {
             ++metrics.referenceConsonantCount;
         }
@@ -383,6 +389,7 @@ PhonemeEvaluationMetrics evaluatePhonemeFrames(
 
         if (bestIndex == prediction.size()) {
             ++metrics.missedCount;
+            missedReferenceIndices.push_back(referenceIndex);
             if (phonemeFrameIsConsonant(ref)) {
                 ++metrics.missedConsonantCount;
             }
@@ -393,11 +400,49 @@ PhonemeEvaluationMetrics evaluatePhonemeFrames(
         ++metrics.matchedCount;
         onsetErrorSumSeconds += bestOnsetError;
         matchedOnsetErrorsSeconds.push_back(bestOnsetError);
+        const double endError = std::abs(prediction[bestIndex].estimatedEndSeconds -
+                                         ref.estimatedEndSeconds);
+        const double referenceDuration = ref.estimatedEndSeconds - ref.estimatedOnsetSeconds;
+        const double predictionDuration = prediction[bestIndex].estimatedEndSeconds -
+                                          prediction[bestIndex].estimatedOnsetSeconds;
+        const double durationError = std::abs(predictionDuration - referenceDuration);
+        endErrorSumSeconds += endError;
+        durationErrorSumSeconds += durationError;
+        matchedEndErrorsSeconds.push_back(endError);
+        matchedDurationErrorsSeconds.push_back(durationError);
     }
 
     metrics.falsePositiveCount = static_cast<std::size_t>(
         std::count(predictionUsed.begin(), predictionUsed.end(), false));
     metrics.substitutionOrTimingErrorCount = metrics.missedCount + metrics.falsePositiveCount;
+
+    // Summarize likely substitutions separately from exact-label scoring. Pair
+    // unmatched segments by strongest overlap without changing precision/recall.
+    std::vector<bool> confusionPredictionUsed = predictionUsed;
+    for (const auto referenceIndex : missedReferenceIndices) {
+        const auto& ref = reference[referenceIndex];
+        std::size_t bestIndex = prediction.size();
+        double bestOverlap = 0.0;
+        double bestOnset = std::numeric_limits<double>::infinity();
+        for (std::size_t index = 0; index < prediction.size(); ++index) {
+            if (confusionPredictionUsed[index] || prediction[index].arpabet == ref.arpabet) {
+                continue;
+            }
+            const double overlap = overlapSeconds(ref, prediction[index]);
+            const double onset = std::abs(prediction[index].estimatedOnsetSeconds -
+                                          ref.estimatedOnsetSeconds);
+            if ((overlap > 0.0 || onset <= options.maxOnsetErrorSeconds) &&
+                (overlap > bestOverlap || (overlap == bestOverlap && onset < bestOnset))) {
+                bestIndex = index;
+                bestOverlap = overlap;
+                bestOnset = onset;
+            }
+        }
+        if (bestIndex != prediction.size()) {
+            confusionPredictionUsed[bestIndex] = true;
+            ++metrics.confusionCounts[ref.arpabet + "->" + prediction[bestIndex].arpabet];
+        }
+    }
 
     if (metrics.predictionCount > 0) {
         metrics.precision = static_cast<double>(metrics.matchedCount) /
@@ -406,6 +451,8 @@ PhonemeEvaluationMetrics evaluatePhonemeFrames(
     if (metrics.referenceCount > 0) {
         metrics.recall = static_cast<double>(metrics.matchedCount) /
                          static_cast<double>(metrics.referenceCount);
+        metrics.missedRate = static_cast<double>(metrics.missedCount) /
+                             static_cast<double>(metrics.referenceCount);
     }
     if (metrics.precision + metrics.recall > 0.0) {
         metrics.f1 = 2.0 * metrics.precision * metrics.recall /
@@ -416,6 +463,14 @@ PhonemeEvaluationMetrics evaluatePhonemeFrames(
             (onsetErrorSumSeconds * 1000.0) / static_cast<double>(metrics.matchedCount);
         metrics.p95OnsetErrorMs =
             percentileSeconds(matchedOnsetErrorsSeconds, 0.95) * 1000.0;
+        metrics.meanAbsoluteEndErrorMs =
+            (endErrorSumSeconds * 1000.0) / static_cast<double>(metrics.matchedCount);
+        metrics.p95EndErrorMs =
+            percentileSeconds(matchedEndErrorsSeconds, 0.95) * 1000.0;
+        metrics.meanAbsoluteDurationErrorMs =
+            (durationErrorSumSeconds * 1000.0) / static_cast<double>(metrics.matchedCount);
+        metrics.p95DurationErrorMs =
+            percentileSeconds(matchedDurationErrorsSeconds, 0.95) * 1000.0;
     }
     if (metrics.predictionCount > 0) {
         metrics.falsePositiveRate = static_cast<double>(metrics.falsePositiveCount) /
@@ -510,9 +565,26 @@ std::string phonemeEvaluationMetricsToJson(const PhonemeEvaluationMetrics& metri
     json << "  \"recall\": " << metrics.recall << ",\n";
     json << "  \"f1\": " << metrics.f1 << ",\n";
     json << "  \"falsePositiveRate\": " << metrics.falsePositiveRate << ",\n";
+    json << "  \"missedRate\": " << metrics.missedRate << ",\n";
     json << "  \"missedConsonantRate\": " << metrics.missedConsonantRate << ",\n";
     json << "  \"meanAbsoluteOnsetErrorMs\": " << metrics.meanAbsoluteOnsetErrorMs << ",\n";
-    json << "  \"p95OnsetErrorMs\": " << metrics.p95OnsetErrorMs << "\n";
+    json << "  \"p95OnsetErrorMs\": " << metrics.p95OnsetErrorMs << ",\n";
+    json << "  \"meanAbsoluteEndErrorMs\": " << metrics.meanAbsoluteEndErrorMs << ",\n";
+    json << "  \"p95EndErrorMs\": " << metrics.p95EndErrorMs << ",\n";
+    json << "  \"meanAbsoluteDurationErrorMs\": " << metrics.meanAbsoluteDurationErrorMs << ",\n";
+    json << "  \"p95DurationErrorMs\": " << metrics.p95DurationErrorMs << ",\n";
+    json << "  \"confusionCounts\": {";
+    std::size_t confusionIndex = 0;
+    for (const auto& [pair, count] : metrics.confusionCounts) {
+        if (confusionIndex++ > 0) {
+            json << ',';
+        }
+        json << "\n    \"" << escapeJsonString(pair) << "\": " << count;
+    }
+    if (!metrics.confusionCounts.empty()) {
+        json << '\n' << "  ";
+    }
+    json << "}\n";
     json << "}\n";
     return json.str();
 }

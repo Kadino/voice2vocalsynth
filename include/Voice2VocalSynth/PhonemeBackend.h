@@ -56,6 +56,8 @@ public:
 
   [[nodiscard]] virtual const char* name() const noexcept = 0;
   [[nodiscard]] virtual PhonemeBackendDescriptor descriptor() const = 0;
+  /// Clears stream-specific decoder state when capture restarts.
+  virtual void reset() {}
   [[nodiscard]] virtual PhonemeBackendResult process(const PhonemeBackendAudioFrame& frame) = 0;
 };
 

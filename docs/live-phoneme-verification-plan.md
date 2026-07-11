@@ -122,6 +122,19 @@ Include at minimum:
 - additional candidate streaming phoneme backends/models selected during
   development.
 
+The first additional live candidate is PocketSphinx 5.1.1 with its bundled
+US-English all-phone model. CMake fetches the versioned BSD-licensed source and
+model archive with a pinned SHA-256. It is a true incremental decoder and emits
+the 39-phone unstressed CMU ARPABET inventory directly. PocketSphinx does not
+provide acoustic posteriors for partial hypotheses, so its backend reports a
+documented commitment confidence rather than presenting that value as a model
+posterior. It is a baseline candidate, not a presumed quality winner.
+
+No permissively licensed, pretrained, true-streaming English phoneme ONNX model
+was available when this candidate was selected. Bidirectional Wav2Vec2/WavLM
+CTC models can still be compared as windowed ONNX candidates, but they must not
+be described as true streaming.
+
 Selection criteria:
 
 - streaming-compatible input contract;
@@ -181,6 +194,11 @@ Temporal correctness gate:
   first automatic-label run establishes realistic label noise. Do not pass a
   backend solely because it is below the latency limit.
 
+The Linux command currently supplies deliberately loose, provisional first-run
+thresholds through environment-overridable values. Reports preserve the raw
+metrics so these thresholds can be tightened after reviewing MFA label noise.
+The scorer fails closed if any temporal threshold is omitted.
+
 ## Linux execution notes
 
 Linux is the first development verification platform. Use the existing JUCE
@@ -213,14 +231,14 @@ behavior, and device enumeration are part of the platform validation surface.
 
 ## Implementation checklist
 
-- [ ] Add persistent JSONL export for live shell logs if the UI-only log is
+- [x] Add persistent JSONL export for live shell logs if the UI-only log is
       insufficient.
-- [ ] Add `steady_ns` or equivalent monotonic emission time to `ph_frame` logs.
-- [ ] Add local LibriSpeech `test-clean` discovery and manifest generation.
-- [ ] Add automatic transcript-to-ARPABET and forced-alignment label generation.
-- [ ] Add Linux virtual-audio setup validation.
-- [ ] Add real-time playback driver for selected clips.
-- [ ] Add live-log-to-prediction conversion.
-- [ ] Add metrics/report generation.
-- [ ] Add backend selection/comparison workflow.
+- [x] Add `steady_ns` or equivalent monotonic emission time to `ph_frame` logs.
+- [x] Add local LibriSpeech `test-clean` discovery and manifest generation.
+- [x] Add automatic transcript-to-ARPABET and forced-alignment label generation.
+- [x] Add Linux virtual-audio setup validation.
+- [x] Add real-time playback driver for selected clips.
+- [x] Add live-log-to-prediction conversion.
+- [x] Add metrics/report generation.
+- [x] Add backend selection/comparison workflow.
 - [ ] Re-run the full plan on Windows after Linux passes.
