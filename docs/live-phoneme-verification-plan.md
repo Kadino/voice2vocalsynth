@@ -258,7 +258,7 @@ Canonical machine-parseable form: [`voice2vocalsynth.spec.md`](../voice2vocalsyn
 
 This section is the human-readable companion for incrementally verifying every live-path
 piece in a local Linux development environment, including dependency bootstrap. It
-complements the 37 CTest targets (library logic and fixtures); it is **not** a CI job.
+complements the 43 CTest targets (library logic and fixtures); it is **not** a CI job.
 
 ### Principles
 
@@ -355,7 +355,7 @@ export LIVE_PHONEME_VERIFY_ROOT="${HOME}/.local/share/Voice2VocalSynth/LivePhone
 | pactl/parec | `pactl info && parec --help` | session + capture |
 | mfa | `mfa version` | present after `conda activate` |
 | JUCE app | `test -x "$VOICE2VOCALSYNTH_APP_BIN"` | executable |
-| CTest | `ctest --test-dir build -N` | 41 tests |
+| CTest | `ctest --test-dir build -N` | 43 tests |
 
 **Pass criteria:** all checks succeed; null sink exists when using the primary route.
 

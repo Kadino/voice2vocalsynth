@@ -550,7 +550,7 @@ livePhonemeVerification:
         - tool: Voice2VocalSynthApp
           path: build-juce/apps/juce-shell/Voice2VocalSynthApp_artefacts/Voice2VocalSynth
         - tool: ctest
-          expectation: 41 tests registered
+          expectation: 43 tests registered
     coverageGaps:
       notCoveredByCTest:
         - realTimeFfmpegPlaybackAt1x
@@ -714,7 +714,10 @@ livePhonemeVerification:
       - done: Add StreamingLiveRenderer unit test with temp voicebank
       - done: Extend LivePhonemeVerificationTests for latency_measure and onnx log kinds
       - done: run_live_phoneme_verify_linux.sh passes -DVOICE2VOCALSYNTH_BUILD_JUCE_APP=ON explicitly
-      - Optional CI harness for script --dry-run and fixture-based scorer only
+      - done: CI harness for play_librispeech_clips_linux.sh --dry-run (ScriptDryRunTests)
+      - done: Integrated VAD/sustain-release/renderer chain (VadSustainPipelineTests)
+      - done: OfflineRenderer and StreamingLiveRenderer sustain-release truncation tests
+      - Optional CI harness for run_live_phoneme_verify_linux.sh --dry-run (requires JUCE build)
 ---
 
 Voice2VocalSynth canonical project specification.

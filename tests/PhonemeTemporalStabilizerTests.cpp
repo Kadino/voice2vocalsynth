@@ -77,6 +77,67 @@ void short_blip_dropped()
     assert(!stab.try_pop_committed(f));
 }
 
+void rapid_label_flicker_keeps_first_stable_segment()
+{
+    PhonemeTemporalStabilizerOptions opt;
+    opt.min_segment_seconds = 0.04;
+    opt.candidate_stable_seconds = 0.06;
+    opt.silence_finalize_seconds = 0.05;
+    PhonemeTemporalStabilizer stab(opt);
+
+    for (int i = 0; i < 6; ++i) {
+        stab.observe({0.01 * static_cast<double>(i), "AH", 0.85F});
+    }
+    stab.observe({0.06, "EH", 0.85F});
+    stab.observe({0.07, "AH", 0.85F});
+    for (int k = 0; k < 8; ++k) {
+        stab.observe({0.08 + 0.01 * static_cast<double>(k), "", 0.0F});
+    }
+
+    PhonemeFrame frame;
+    assert(stab.try_pop_committed(frame));
+    assert(frame.arpabet == "AH");
+    assert(!stab.try_pop_committed(frame));
+}
+
+void reset_clears_pending_segments()
+{
+    PhonemeTemporalStabilizerOptions opt;
+    opt.min_segment_seconds = 0.04;
+    opt.silence_finalize_seconds = 0.05;
+    PhonemeTemporalStabilizer stab(opt);
+
+    for (int i = 0; i < 8; ++i) {
+        stab.observe({0.01 * static_cast<double>(i), "IH", 0.9F});
+    }
+    stab.reset();
+    for (int k = 0; k < 10; ++k) {
+        stab.observe({0.2 + 0.01 * static_cast<double>(k), "", 0.0F});
+    }
+
+    PhonemeFrame frame;
+    assert(!stab.try_pop_committed(frame));
+}
+
+void low_confidence_frames_ignored()
+{
+    PhonemeTemporalStabilizerOptions opt;
+    opt.min_segment_seconds = 0.04;
+    opt.min_observation_confidence = 0.5F;
+    opt.silence_finalize_seconds = 0.05;
+    PhonemeTemporalStabilizer stab(opt);
+
+    for (int i = 0; i < 8; ++i) {
+        stab.observe({0.01 * static_cast<double>(i), "AH", 0.2F});
+    }
+    for (int k = 0; k < 10; ++k) {
+        stab.observe({0.08 + 0.01 * static_cast<double>(k), "", 0.0F});
+    }
+
+    PhonemeFrame frame;
+    assert(!stab.try_pop_committed(frame));
+}
+
 } // namespace
 
 int main()
@@ -84,6 +145,9 @@ int main()
     silence_after_vowel_emits_one_segment();
     stable_competitor_produces_two_segments();
     short_blip_dropped();
+    rapid_label_flicker_keeps_first_stable_segment();
+    reset_clears_pending_segments();
+    low_confidence_frames_ignored();
     std::cout << "PhonemeTemporalStabilizer tests passed\n";
     return 0;
 }

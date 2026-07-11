@@ -137,12 +137,94 @@ void skipsDuplicateConsecutivePhonemes()
     std::filesystem::remove_all(voicebankRoot);
 }
 
+void sustainReleaseTruncatesScheduledAudio()
+{
+    const auto voicebankRoot = makeTempVoicebankRoot();
+    StreamingLiveRendererOptions options;
+    options.outputSampleRate = 48000;
+    options.defaultEventDurationMs = 500.0;
+    StreamingLiveRenderer renderer(options);
+    std::string error;
+    assert(renderer.configure(voicebankRoot, std::nullopt, error));
+
+    PhonemeFrame frame;
+    frame.arpabet = "AE";
+    frame.estimatedOnsetSeconds = 0.0;
+    frame.estimatedEndSeconds = 0.5;
+    frame.isVowel = true;
+
+    PitchTarget pitchTarget;
+    pitchTarget.displayNoteName = "C4";
+    pitchTarget.targetFrequencyHz = PitchTargetCalculator::midiToFrequency(60.0);
+    pitchTarget.targetMidi = 60.0;
+    pitchTarget.displayMidiNote = 60;
+
+    renderer.onUtteranceStart();
+    renderer.onSustainRelease(0.08);
+    renderer.onCommittedPhoneme(frame, pitchTarget, 0.0, 25.0);
+
+    std::vector<float> earlyBlock(3840, 0.0F);
+    renderer.renderBlock(earlyBlock.data(), static_cast<int>(earlyBlock.size()), 0.0, 48000.0);
+    float earlyPeak = 0.0F;
+    for (float sample : earlyBlock) {
+        earlyPeak = std::max(earlyPeak, std::fabs(sample));
+    }
+    assert(earlyPeak > 0.01F);
+
+    std::vector<float> lateBlock(3840, 0.0F);
+    renderer.renderBlock(lateBlock.data(), static_cast<int>(lateBlock.size()), 0.12, 48000.0);
+    float latePeak = 0.0F;
+    for (float sample : lateBlock) {
+        latePeak = std::max(latePeak, std::fabs(sample));
+    }
+    assert(latePeak < 0.001F);
+
+    std::filesystem::remove_all(voicebankRoot);
+}
+
+void utteranceStartClearsSustainRelease()
+{
+    const auto voicebankRoot = makeTempVoicebankRoot();
+    StreamingLiveRenderer renderer;
+    std::string error;
+    assert(renderer.configure(voicebankRoot, std::nullopt, error));
+
+    PhonemeFrame frame;
+    frame.arpabet = "AE";
+    frame.estimatedOnsetSeconds = 0.0;
+    frame.estimatedEndSeconds = 0.12;
+    frame.isVowel = true;
+
+    PitchTarget pitchTarget;
+    pitchTarget.displayNoteName = "C4";
+    pitchTarget.targetFrequencyHz = PitchTargetCalculator::midiToFrequency(60.0);
+    pitchTarget.targetMidi = 60.0;
+    pitchTarget.displayMidiNote = 60;
+
+    renderer.onUtteranceStart();
+    renderer.onSustainRelease(0.05);
+    renderer.onUtteranceStart();
+    renderer.onCommittedPhoneme(frame, pitchTarget, 0.0, 25.0);
+
+    std::vector<float> lateBlock(9600, 0.0F);
+    renderer.renderBlock(lateBlock.data(), static_cast<int>(lateBlock.size()), 0.10, 48000.0);
+    float latePeak = 0.0F;
+    for (float sample : lateBlock) {
+        latePeak = std::max(latePeak, std::fabs(sample));
+    }
+    assert(latePeak > 0.01F);
+
+    std::filesystem::remove_all(voicebankRoot);
+}
+
 } // namespace
 
 int main()
 {
     schedulesVowelAndRendersAudio();
     skipsDuplicateConsecutivePhonemes();
+    sustainReleaseTruncatesScheduledAudio();
+    utteranceStartClearsSustainRelease();
     std::cout << "StreamingLiveRenderer tests passed\n";
     return 0;
 }
