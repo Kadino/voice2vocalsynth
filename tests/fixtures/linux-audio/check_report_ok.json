@@ -1,0 +1,9 @@
+{
+  "valid": true,
+  "route": "pipewire-loopback",
+  "playbackDevice": "LivePhonemeVerify",
+  "captureDevice": "LivePhonemeVerify.monitor",
+  "serverName": "PulseAudio (on PipeWire 1.0.5)",
+  "note": "Playback to LivePhonemeVerify is captured from LivePhonemeVerify.monitor for the JUCE shell input.",
+  "probePassed": false
+}
