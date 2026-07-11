@@ -10,7 +10,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 VERIFY_ROOT="${LIVE_PHONEME_VERIFY_ROOT:-${HOME}/.local/share/Voice2VocalSynth/LivePhonemeVerify}"
-VALIDATE_BIN="${REPO_ROOT}/build/Voice2VocalSynthLinuxAudioValidate"
+BUILD_DIR="${VOICE2VOCALSYNTH_BUILD_DIR:-${REPO_ROOT}/build}"
+VALIDATE_BIN="${BUILD_DIR}/Voice2VocalSynthLinuxAudioValidate"
 SINK_NAME="${LINUX_AUDIO_SINK_NAME:-LivePhonemeVerify}"
 MONITOR_SOURCE="${SINK_NAME}.monitor"
 DEFAULT_ROUTE="auto"
@@ -61,9 +62,9 @@ EOF
 
 require_build_target() {
   if [[ ! -x "${VALIDATE_BIN}" ]]; then
-    mkdir -p "${REPO_ROOT}/build"
-    CXX="${CXX:-g++}" cmake -S "${REPO_ROOT}" -B "${REPO_ROOT}/build" -DVOICE2VOCALSYNTH_BUILD_JUCE_APP=OFF >&2
-    cmake --build "${REPO_ROOT}/build" --target Voice2VocalSynthLinuxAudioValidate -j"$(nproc)" >&2
+    mkdir -p "${BUILD_DIR}"
+    CXX="${CXX:-g++}" cmake -S "${REPO_ROOT}" -B "${BUILD_DIR}" -DVOICE2VOCALSYNTH_BUILD_JUCE_APP=OFF >&2
+    cmake --build "${BUILD_DIR}" --target Voice2VocalSynthLinuxAudioValidate -j"$(nproc)" >&2
   fi
 }
 

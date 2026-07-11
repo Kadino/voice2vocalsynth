@@ -5,6 +5,7 @@
 #include "Voice2VocalSynth/LivePhonemeVerifyPaths.h"
 
 #include <filesystem>
+#include <cmath>
 #include <optional>
 
 namespace Voice2VocalSynth
@@ -29,7 +30,7 @@ std::optional<double> parseDouble(const std::string& value)
     try {
         std::size_t consumed = 0;
         const double parsed = std::stod(value, &consumed);
-        if (consumed != value.size()) {
+        if (consumed != value.size() || !std::isfinite(parsed)) {
             return std::nullopt;
         }
         return parsed;
@@ -97,6 +98,23 @@ std::optional<Options> parseOptions(const std::vector<std::string>& args, std::s
     if (options.liveLog.empty() || options.playbackManifest.empty() ||
         options.labelsRoot.empty()) {
         error = "--live-log, --playback-manifest, and --labels-root are required";
+        return std::nullopt;
+    }
+    const auto nonNegative = [](const std::optional<double>& value) {
+        return !value || *value >= 0.0;
+    };
+    if (options.gates.maxEndToEndLatencyMs <= 0.0 ||
+        !nonNegative(options.gates.maxMeanOnsetErrorMs) ||
+        !nonNegative(options.gates.maxP95OnsetErrorMs) ||
+        !nonNegative(options.gates.maxMeanEndErrorMs) ||
+        !nonNegative(options.gates.maxP95EndErrorMs) ||
+        !nonNegative(options.gates.maxMeanDurationErrorMs) ||
+        (options.gates.minF1 &&
+         (*options.gates.minF1 < 0.0 || *options.gates.minF1 > 1.0)) ||
+        (options.gates.maxMissedConsonantRate &&
+         (*options.gates.maxMissedConsonantRate < 0.0 ||
+          *options.gates.maxMissedConsonantRate > 1.0))) {
+        error = "Latency/error limits must be non-negative and F1/rates must be within [0,1]";
         return std::nullopt;
     }
     const auto defaults = livePhonemeVerifyRunPaths(options.liveLog.parent_path());

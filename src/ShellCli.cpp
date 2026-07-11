@@ -1,6 +1,8 @@
 #include "Voice2VocalSynth/ShellCli.h"
 
+#include <cmath>
 #include <exception>
+#include <stdexcept>
 
 namespace Voice2VocalSynth
 {
@@ -64,7 +66,8 @@ std::string shellCliUsage()
            "[--phoneme-backend placeholder|onnx_phoneme|pocketsphinx] "
            "[--pocketsphinx-model-root <path>] [--onnx-model <path>] "
            "[--onnx-config <path>] [--capture-device <name>] "
-           "[--auto-loopback-measure] [--quit-after-seconds <seconds>]";
+           "[--auto-loopback-measure] [--quit-after-seconds <seconds>] "
+           "[--quit-file <path>]";
 }
 
 std::optional<ShellLiveLogExportOptions> parseShellLiveLogExportArgs(const std::vector<std::string>& args,
@@ -125,18 +128,32 @@ std::optional<ShellLiveLogExportOptions> parseShellLiveLogExportArgs(const std::
             options.captureDevice = args[++index];
             continue;
         }
+        if (arg == "--quit-file") {
+            if (index + 1 >= args.size()) {
+                error = "Missing value for --quit-file";
+                return std::nullopt;
+            }
+            options.quitFile = args[++index];
+            continue;
+        }
         if (arg == "--quit-after-seconds") {
             if (index + 1 >= args.size()) {
                 error = "Missing value for --quit-after-seconds";
                 return std::nullopt;
             }
             try {
-                options.quitAfterSeconds = std::stod(args[++index]);
+                const auto& value = args[++index];
+                std::size_t consumed = 0;
+                options.quitAfterSeconds = std::stod(value, &consumed);
+                if (consumed != value.size()) {
+                    throw std::invalid_argument("trailing content");
+                }
             } catch (const std::exception&) {
                 error = "Invalid value for --quit-after-seconds";
                 return std::nullopt;
             }
-            if (*options.quitAfterSeconds <= 0.0) {
+            if (!std::isfinite(*options.quitAfterSeconds) ||
+                *options.quitAfterSeconds <= 0.0) {
                 error = "--quit-after-seconds must be positive";
                 return std::nullopt;
             }

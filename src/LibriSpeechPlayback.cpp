@@ -311,7 +311,8 @@ bool writeLibriSpeechPlaybackManifest(const LibriSpeechPlaybackPlan& plan,
              << "\"utteranceId\":\"" << jsonEscape(clip.utteranceId) << "\","
              << "\"flacPath\":\"" << jsonEscape(clip.flacPath.string()) << "\","
              << "\"durationSeconds\":" << clip.durationSeconds << ","
-             << "\"startOffsetSeconds\":" << clip.startOffsetSeconds << "}";
+             << "\"startOffsetSeconds\":" << clip.startOffsetSeconds << ","
+             << "\"playbackStartedSteadyNs\":" << clip.playbackStartedSteadyNs << "}";
         if (index + 1 < plan.clips.size()) {
             json << ',';
         }
@@ -356,7 +357,9 @@ LibriSpeechPlaybackManifestLoadResult parseLibriSpeechPlaybackManifest(
             result.plan.clips.clear();
             return result;
         }
-        result.plan.clips.push_back({*id, *flac, *clipDuration, *offset});
+        const auto started = jsonNumber(object, "playbackStartedSteadyNs").value_or(0.0);
+        result.plan.clips.push_back(
+            {*id, *flac, *clipDuration, *offset, static_cast<std::int64_t>(started)});
     }
     if (result.plan.clips.empty()) {
         result.error = "Playback manifest contains no clips";

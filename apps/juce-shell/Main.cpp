@@ -44,12 +44,18 @@ public:
                 if (!Voice2VocalSynth::resolveShellLiveLogExportPaths(*options, paths, error)) {
                     juce::Logger::writeToLog("Voice2VocalSynth: live log export setup failed: "
                                              + juce::String(error));
+                    setApplicationReturnValue(1);
+                    quit();
+                    return;
                 } else {
                     liveLogExportPaths = std::move(paths);
                 }
             }
         } else if (!error.empty()) {
             juce::Logger::writeToLog("Voice2VocalSynth: " + juce::String(error));
+            setApplicationReturnValue(1);
+            quit();
+            return;
         }
 
         mainWindow = std::make_unique<MainWindow>(getApplicationName(),

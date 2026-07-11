@@ -235,6 +235,7 @@ LivePhonemeLogLoadResult parseLivePhonemeLogJsonl(std::string_view jsonl)
     std::istringstream input{std::string(jsonl)};
     std::string line;
     std::size_t lineNumber = 0;
+    bool sawSessionStart = false;
     while (std::getline(input, line)) {
         ++lineNumber;
         if (line.empty()) {
@@ -246,6 +247,11 @@ LivePhonemeLogLoadResult parseLivePhonemeLogJsonl(std::string_view jsonl)
             return result;
         }
         if (*kind == "session_start") {
+            if (sawSessionStart) {
+                result.error = "Live log contains multiple session_start records";
+                return result;
+            }
+            sawSessionStart = true;
             result.log.sessionBackend = stringField(line, "backend").value_or("");
             result.log.sessionSteadyNs =
                 static_cast<std::int64_t>(numberField(line, "steady_ns").value_or(0.0));
@@ -357,24 +363,31 @@ LivePhonemeVerificationResult verifyLivePhonemeRun(
     report.predictions = convertLivePhonemeFrames(log, report.backend);
     report.predictionCount = report.predictions.size();
 
-    if (playback.playbackStartedSteadyNs <= 0 || log.sessionSteadyNs <= 0) {
-        result.error = "Playback/session monotonic anchors are required for live-log alignment";
+    if (log.sessionSteadyNs <= 0) {
+        result.error = "The session monotonic anchor is required for live-log alignment";
         return result;
     }
-    const double playbackStartCaptureSeconds =
-        log.sessionStreamTimeSeconds +
-        static_cast<double>(playback.playbackStartedSteadyNs - log.sessionSteadyNs) / 1.0e9;
 
     std::vector<PhonemeFrame> globalReference;
     std::vector<PhonemeFrame> globalPrediction;
+    double evaluationStartSeconds = std::numeric_limits<double>::infinity();
+    double evaluationEndSeconds = -std::numeric_limits<double>::infinity();
     for (const auto& clip : playback.clips) {
+        if (clip.playbackStartedSteadyNs <= 0) {
+            result.error = "Every playback clip requires an actual monotonic launch anchor";
+            return result;
+        }
         const auto loaded = loadPhonemeFrameLabelsJson(labelsRoot / (clip.utteranceId + ".json"));
         if (!loaded.ok) {
             result.error = loaded.error;
             return result;
         }
-        const double clipStart = playbackStartCaptureSeconds + clip.startOffsetSeconds;
+        const double clipStart =
+            log.sessionStreamTimeSeconds +
+            static_cast<double>(clip.playbackStartedSteadyNs - log.sessionSteadyNs) / 1.0e9;
         const double clipEnd = clipStart + clip.durationSeconds;
+        evaluationStartSeconds = std::min(evaluationStartSeconds, clipStart);
+        evaluationEndSeconds = std::max(evaluationEndSeconds, clipEnd);
         std::vector<PhonemeFrame> localPrediction;
         for (const auto& frame : report.predictions) {
             if (frame.estimatedEndSeconds < clipStart || frame.estimatedOnsetSeconds > clipEnd) {
@@ -402,11 +415,12 @@ LivePhonemeVerificationResult verifyLivePhonemeRun(
         globalReference.insert(globalReference.end(),
                                shiftedReference.begin(),
                                shiftedReference.end());
-        auto shiftedPrediction = localPrediction;
-        shiftFrames(shiftedPrediction, clipStart);
-        globalPrediction.insert(globalPrediction.end(),
-                                shiftedPrediction.begin(),
-                                shiftedPrediction.end());
+    }
+    for (const auto& frame : report.predictions) {
+        if (frame.estimatedEndSeconds >= evaluationStartSeconds &&
+            frame.estimatedOnsetSeconds <= evaluationEndSeconds) {
+            globalPrediction.push_back(frame);
+        }
     }
 
     PhonemeEvaluationOptions evaluationOptions;
@@ -440,8 +454,9 @@ LivePhonemeVerificationResult verifyLivePhonemeRun(
 
     if (log.hasLatencyMeasurement && log.latencyMeasurementValid &&
         log.measuredRoundTripMs > 0.0) {
-        report.latency.endToEndMs = log.measuredRoundTripMs;
-        report.latency.endToEndSource = "loopback_measurement";
+        report.latency.endToEndMs =
+            log.measuredRoundTripMs + report.latency.decision.p95Ms;
+        report.latency.endToEndSource = "loopback_plus_decision_p95";
     } else if (log.deviceSettings && log.deviceSettings->sampleRateHz > 0.0) {
         AudioDeviceLatency device;
         device.sampleRateHz = log.deviceSettings->sampleRateHz;
@@ -449,15 +464,21 @@ LivePhonemeVerificationResult verifyLivePhonemeRun(
         device.outputBufferSizeSamples = log.deviceSettings->outputBufferSamples;
         device.inputDeviceLatencySamples = log.deviceSettings->inputLatencySamples;
         device.outputDeviceLatencySamples = log.deviceSettings->outputLatencySamples;
-        auto analysis = LatencyBudgetCalculator::presetSettings(LatencyPreset::Balanced);
+        AnalysisLatencySettings analysis;
+        analysis.preset = LatencyPreset::Custom;
+        analysis.analysisWindowMs = 0.0;
+        analysis.phonemeLookaheadMs = 0.0;
+        analysis.phonemeStabilizationMs = 0.0;
+        analysis.pitchSmoothingMs = 0.0;
+        analysis.renderQueueMs = 10.0;
         const auto estimate = LatencyBudgetCalculator::calculate(device, analysis);
         report.latency.endToEndMs =
-            estimate.endToEndMonitoringLatencyMs() + report.latency.backend.p95Ms;
-        report.latency.endToEndSource = "device_and_pipeline_estimate";
+            estimate.endToEndMonitoringLatencyMs() + report.latency.decision.p95Ms;
+        report.latency.endToEndSource = "device_path_plus_decision_p95";
     } else if (log.estimatedEndToEndMs > 0.0) {
         report.latency.endToEndMs =
-            log.estimatedEndToEndMs + report.latency.backend.p95Ms;
-        report.latency.endToEndSource = "logged_estimate";
+            log.estimatedEndToEndMs + report.latency.decision.p95Ms;
+        report.latency.endToEndSource = "logged_estimate_plus_decision_p95";
     } else {
         result.error = "Live log has no measured or estimable end-to-end latency";
         return result;
@@ -470,6 +491,12 @@ LivePhonemeVerificationResult verifyLivePhonemeRun(
     }
     if (report.predictions.empty()) {
         failures.push_back("no ph_frame predictions were emitted by the selected backend");
+    }
+    if (report.latency.decision.sampleCount == 0) {
+        failures.push_back("no valid phoneme decision-latency samples were captured");
+    }
+    if (report.latency.backend.sampleCount == 0) {
+        failures.push_back("no valid backend inference-latency samples were captured");
     }
     if (report.latency.endToEndMs > gates.maxEndToEndLatencyMs) {
         failures.push_back("end-to-end latency exceeds " +

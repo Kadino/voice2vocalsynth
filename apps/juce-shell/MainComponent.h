@@ -151,6 +151,7 @@ private:
     std::unique_ptr<std::ofstream> liveLogFile_;
     std::mutex liveLogFileMutex_;
     bool liveLogExportReady_ = false;
+    std::string startupError_;
     std::chrono::steady_clock::time_point launchSteadyTime_ = std::chrono::steady_clock::now();
     bool timedQuitRequested_ = false;
 

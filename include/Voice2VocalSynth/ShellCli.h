@@ -20,6 +20,7 @@ struct ShellLiveLogExportOptions
     std::optional<std::filesystem::path> onnxConfigPath;
     std::optional<std::string> captureDevice;
     std::optional<double> quitAfterSeconds;
+    std::optional<std::filesystem::path> quitFile;
     bool autoLoopbackMeasure = false;
 };
 

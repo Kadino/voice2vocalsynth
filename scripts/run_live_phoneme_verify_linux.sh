@@ -6,6 +6,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 BUILD_DIR="${VOICE2VOCALSYNTH_BUILD_DIR:-${REPO_ROOT}/build}"
+export VOICE2VOCALSYNTH_BUILD_DIR="${BUILD_DIR}"
 VERIFY_ROOT="${LIVE_PHONEME_VERIFY_ROOT:-${HOME}/.local/share/Voice2VocalSynth/LivePhonemeVerify}"
 LABELS_ROOT="${VERIFY_ROOT}/labels/librispeech-test-clean"
 AUDIO_MANIFEST="${VERIFY_ROOT}/linux-virtual-audio.json"
@@ -119,13 +120,6 @@ fi
 
 if [[ "${SKIP_SETUP}" -eq 0 ]]; then
   "${SCRIPT_DIR}/setup_librispeech_test_clean.sh" --verify
-  if [[ ! -f "${LABELS_ROOT}/manifest.json" ]]; then
-    if [[ "${SUBSET}" -eq 0 ]]; then
-      "${SCRIPT_DIR}/generate_librispeech_mfa_labels.sh" --all
-    else
-      "${SCRIPT_DIR}/generate_librispeech_mfa_labels.sh" --subset "${SUBSET}"
-    fi
-  fi
 fi
 
 audio_args=(--check --write-manifest)
@@ -143,6 +137,16 @@ PY
 if [[ -z "${RUN_DIR}" ]]; then
   RUN_DIR="${VERIFY_ROOT}/runs/$(date -u +%Y%m%dT%H%M%SZ)-${BACKEND}"
 fi
+if [[ -e "${RUN_DIR}" ]]; then
+  if [[ ! -d "${RUN_DIR}" ]]; then
+    echo "error: run path exists and is not a directory: ${RUN_DIR}" >&2
+    exit 1
+  fi
+  if compgen -G "${RUN_DIR}/*" >/dev/null; then
+    echo "error: refusing to reuse nonempty run directory: ${RUN_DIR}" >&2
+    exit 1
+  fi
+fi
 mkdir -p "${RUN_DIR}"
 
 selection_args=(--run-dir "${RUN_DIR}")
@@ -156,16 +160,6 @@ fi
 "${SCRIPT_DIR}/play_librispeech_clips_linux.sh" --dry-run "${selection_args[@]}"
 
 PLAYBACK_MANIFEST="${RUN_DIR}/playback-manifest.json"
-TOTAL_DURATION="$(python3 - "${PLAYBACK_MANIFEST}" <<'PY'
-import json, sys
-print(json.load(open(sys.argv[1], encoding="utf-8"))["totalDurationSeconds"])
-PY
-)"
-QUIT_AFTER="$(python3 - "${TOTAL_DURATION}" <<'PY'
-import sys
-print(float(sys.argv[1]) + 12.0)
-PY
-)"
 
 echo "RUN_DIR=${RUN_DIR}"
 echo "backend=${BACKEND} capture=${CAPTURE_DEVICE}"
@@ -174,12 +168,38 @@ if [[ "${DRY_RUN}" -eq 1 ]]; then
   exit 0
 fi
 
+missing_labels="$(python3 - "${PLAYBACK_MANIFEST}" "${LABELS_ROOT}" <<'PY'
+import json, pathlib, sys
+plan = json.load(open(sys.argv[1], encoding="utf-8"))
+root = pathlib.Path(sys.argv[2])
+print("\n".join(
+    clip["utteranceId"]
+    for clip in plan["clips"]
+    if not (root / f"{clip['utteranceId']}.json").is_file()
+))
+PY
+)"
+if [[ -n "${missing_labels}" ]]; then
+  if [[ "${SKIP_SETUP}" -eq 1 ]]; then
+    echo "error: reference labels are missing for selected clips:" >&2
+    printf '%s\n' "${missing_labels}" >&2
+    exit 1
+  fi
+  if [[ -n "${UTTERANCE_ID}" ]]; then
+    "${SCRIPT_DIR}/generate_librispeech_mfa_labels.sh" --utterance-id "${UTTERANCE_ID}"
+  elif [[ "${SUBSET}" -eq 0 ]]; then
+    "${SCRIPT_DIR}/generate_librispeech_mfa_labels.sh" --all
+  else
+    "${SCRIPT_DIR}/generate_librispeech_mfa_labels.sh" --subset "${SUBSET}"
+  fi
+fi
+
 shell_args=(
   --live-log-export
   --live-log-out "${RUN_DIR}/live-log.jsonl"
   --phoneme-backend "${BACKEND}"
   --capture-device "${CAPTURE_DEVICE}"
-  --quit-after-seconds "${QUIT_AFTER}"
+  --quit-file "${RUN_DIR}/quit-request"
 )
 if [[ -n "${POCKETSPHINX_MODEL_ROOT}" ]]; then
   shell_args+=(--pocketsphinx-model-root "${POCKETSPHINX_MODEL_ROOT}")
@@ -217,8 +237,16 @@ if [[ ! -f "${RUN_DIR}/live-log.jsonl" ]] ||
   echo "error: timed out waiting for JUCE live-log startup" >&2
   exit 1
 fi
+if ! rg -q '"startup_ok":true' "${RUN_DIR}/live-log.jsonl"; then
+  echo "error: JUCE shell rejected the requested backend or capture device" >&2
+  rg '"kind":"session_start"' "${RUN_DIR}/live-log.jsonl" >&2 || true
+  exit 1
+fi
 
 "${SCRIPT_DIR}/play_librispeech_clips_linux.sh" "${selection_args[@]}"
+# Let trailing virtual-input silence finalize the decoder's last partial phone.
+sleep 1
+: > "${RUN_DIR}/quit-request"
 wait "${shell_pid}"
 trap - EXIT INT TERM
 

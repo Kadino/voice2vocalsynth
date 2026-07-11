@@ -1,5 +1,6 @@
 #include <Voice2VocalSynth/LibriSpeechPlayback.h>
 #include <Voice2VocalSynth/LivePhonemeVerification.h>
+#include <Voice2VocalSynth/LivePhonemeVerifyCli.h>
 #include <Voice2VocalSynth/MfaLabelPipeline.h>
 
 #include <cassert>
@@ -59,6 +60,14 @@ void parsesAndConvertsLiveLog()
     assert(converted[0].arpabet == "K");
 }
 
+void rejectsMixedLiveSessions()
+{
+    const auto parsed = parseLivePhonemeLogJsonl(
+        "{\"kind\":\"session_start\",\"backend\":\"pocketsphinx_allphone\"}\n"
+        "{\"kind\":\"session_start\",\"backend\":\"pocketsphinx_allphone\"}\n");
+    assert(!parsed.ok);
+}
+
 void verifiesAlignedPlaybackAndWritesReports()
 {
     const auto parsed = parseLivePhonemeLogJsonl(sampleLog());
@@ -66,7 +75,8 @@ void verifiesAlignedPlaybackAndWritesReports()
 
     LibriSpeechPlaybackPlan playback;
     playback.playbackStartedSteadyNs = 2000000000;
-    playback.clips.push_back({"utt-1", "/tmp/utt-1.flac", 0.5, 0.0});
+    playback.clips.push_back(
+        {"utt-1", "/tmp/utt-1.flac", 0.5, 0.0, 2000000000});
     playback.totalDurationSeconds = 0.5;
 
     const auto root = tempRoot();
@@ -103,7 +113,8 @@ void rejectsPlaceholderAsPassingBackend()
     assert(parsed.ok);
     LibriSpeechPlaybackPlan playback;
     playback.playbackStartedSteadyNs = 2000000000;
-    playback.clips.push_back({"utt-1", "/tmp/utt-1.flac", 0.5, 0.0});
+    playback.clips.push_back(
+        {"utt-1", "/tmp/utt-1.flac", 0.5, 0.0, 2000000000});
 
     const auto root = tempRoot();
     std::filesystem::create_directories(root);
@@ -127,7 +138,8 @@ void requiresTemporalGateConfiguration()
     assert(parsed.ok);
     LibriSpeechPlaybackPlan playback;
     playback.playbackStartedSteadyNs = 2000000000;
-    playback.clips.push_back({"utt-1", "/tmp/utt-1.flac", 0.5, 0.0});
+    playback.clips.push_back(
+        {"utt-1", "/tmp/utt-1.flac", 0.5, 0.0, 2000000000});
     const auto root = tempRoot();
     std::filesystem::create_directories(root);
     PhonemeFrame reference;
@@ -143,14 +155,27 @@ void requiresTemporalGateConfiguration()
     std::filesystem::remove_all(root);
 }
 
+void cliRejectsNonFiniteThresholds()
+{
+    const auto result = runLivePhonemeVerifyCli(
+        {"Voice2VocalSynthLivePhonemeVerify",
+         "--live-log", "/tmp/live.jsonl",
+         "--playback-manifest", "/tmp/playback.json",
+         "--labels-root", "/tmp/labels",
+         "--min-f1", "nan"});
+    assert(result.exitCode == LivePhonemeVerifyCliExitCode::Usage);
+}
+
 } // namespace
 
 int main()
 {
     parsesAndConvertsLiveLog();
+    rejectsMixedLiveSessions();
     verifiesAlignedPlaybackAndWritesReports();
     rejectsPlaceholderAsPassingBackend();
     requiresTemporalGateConfiguration();
+    cliRejectsNonFiniteThresholds();
     std::cout << "LivePhonemeVerification tests passed\n";
     return 0;
 }

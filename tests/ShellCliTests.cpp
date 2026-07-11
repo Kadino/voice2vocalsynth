@@ -32,6 +32,8 @@ void parsesExportFlags()
         "LivePhonemeVerify.monitor",
         "--quit-after-seconds",
         "20",
+        "--quit-file",
+        "/tmp/custom/quit",
         "--auto-loopback-measure",
     };
     const auto options = parseShellLiveLogExportArgs(args, error);
@@ -42,6 +44,7 @@ void parsesExportFlags()
     assert(options->pocketSphinxModelRoot == "/tmp/model");
     assert(options->captureDevice == "LivePhonemeVerify.monitor");
     assert(options->quitAfterSeconds == 20.0);
+    assert(options->quitFile == "/tmp/custom/quit");
     assert(options->autoLoopbackMeasure);
     assert(error.empty());
 }
@@ -54,6 +57,9 @@ void rejectsInvalidAutomationOptions()
     assert(!error.empty());
     assert(!parseShellLiveLogExportArgs(
         {"Voice2VocalSynthApp", "--quit-after-seconds", "0"}, error));
+    assert(!error.empty());
+    assert(!parseShellLiveLogExportArgs(
+        {"Voice2VocalSynthApp", "--quit-after-seconds", "nan"}, error));
     assert(!error.empty());
 }
 

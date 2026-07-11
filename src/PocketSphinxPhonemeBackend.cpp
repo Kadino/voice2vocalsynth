@@ -1,4 +1,5 @@
 #include "Voice2VocalSynth/PocketSphinxPhonemeBackend.h"
+#include "Voice2VocalSynth/PhonemeFallbackMapper.h"
 
 #include <algorithm>
 #include <chrono>
@@ -43,32 +44,68 @@ std::string normalizePhone(std::string phone)
     return phone;
 }
 
-std::vector<std::int16_t> resampleTo16k(const float* samples,
-                                        const std::size_t count,
-                                        const double sourceRate)
+struct StreamingResampler
 {
-    if (samples == nullptr || count == 0 || sourceRate <= 0.0) {
-        return {};
+    void reset()
+    {
+        sourceRateHz = 0.0;
+        sourceSamplesSeen = 0;
+        nextSourcePosition = 0.0;
+        previousSample = 0.0F;
+        havePreviousSample = false;
     }
 
-    const auto outputCount = static_cast<std::size_t>(
-        std::max(1.0, std::round(static_cast<double>(count) * kPocketSphinxSampleRateHz /
-                                 sourceRate)));
-    std::vector<std::int16_t> output(outputCount);
-    const double sourcePerOutput = sourceRate / kPocketSphinxSampleRateHz;
-    for (std::size_t index = 0; index < outputCount; ++index) {
-        const double sourcePosition = static_cast<double>(index) * sourcePerOutput;
-        const auto lower = std::min(static_cast<std::size_t>(sourcePosition), count - 1);
-        const auto upper = std::min(lower + 1, count - 1);
-        const float fraction = static_cast<float>(sourcePosition - static_cast<double>(lower));
-        const float value = std::clamp(samples[lower] * (1.0F - fraction) +
-                                           samples[upper] * fraction,
-                                       -1.0F,
-                                       1.0F);
-        output[index] = static_cast<std::int16_t>(std::lround(value * 32767.0F));
+    std::vector<std::int16_t> process(const float* samples,
+                                      const std::size_t count,
+                                      const double rate)
+    {
+        if (samples == nullptr || count == 0 || rate <= 0.0) {
+            return {};
+        }
+        if (sourceRateHz <= 0.0 || std::abs(sourceRateHz - rate) > 1.0e-6) {
+            reset();
+            sourceRateHz = rate;
+        }
+
+        const std::uint64_t chunkStart = sourceSamplesSeen;
+        const std::uint64_t chunkEnd = chunkStart + count;
+        std::vector<std::int16_t> output;
+        output.reserve(static_cast<std::size_t>(
+            std::ceil(static_cast<double>(count) * kPocketSphinxSampleRateHz / rate)) + 1);
+
+        const double sourceStep = rate / kPocketSphinxSampleRateHz;
+        while (std::ceil(nextSourcePosition) < static_cast<double>(chunkEnd)) {
+            const auto lowerGlobal = static_cast<std::uint64_t>(std::floor(nextSourcePosition));
+            const auto upperGlobal = static_cast<std::uint64_t>(std::ceil(nextSourcePosition));
+            const auto sampleAt = [&](const std::uint64_t globalIndex) {
+                if (globalIndex < chunkStart) {
+                    return previousSample;
+                }
+                return samples[std::min<std::size_t>(
+                    static_cast<std::size_t>(globalIndex - chunkStart), count - 1)];
+            };
+            const float lower = sampleAt(lowerGlobal);
+            const float upper = sampleAt(upperGlobal);
+            const float fraction =
+                static_cast<float>(nextSourcePosition - std::floor(nextSourcePosition));
+            const float value =
+                std::clamp(lower * (1.0F - fraction) + upper * fraction, -1.0F, 1.0F);
+            output.push_back(
+                static_cast<std::int16_t>(std::lround(value * 32767.0F)));
+            nextSourcePosition += sourceStep;
+        }
+        previousSample = samples[count - 1];
+        havePreviousSample = true;
+        sourceSamplesSeen = chunkEnd;
+        return output;
     }
-    return output;
-}
+
+    double sourceRateHz = 0.0;
+    std::uint64_t sourceSamplesSeen = 0;
+    double nextSourcePosition = 0.0;
+    float previousSample = 0.0F;
+    bool havePreviousSample = false;
+};
 
 } // namespace
 
@@ -80,6 +117,9 @@ struct PocketSphinxPhonemeBackend::Impl
     bool utteranceStarted = false;
     bool haveInputEnd = false;
     double inputEndSeconds = 0.0;
+    double decoderStreamStartSeconds = 0.0;
+    int emittedEndFrame = -1;
+    StreamingResampler resampler;
 
     ~Impl()
     {
@@ -185,6 +225,9 @@ void PocketSphinxPhonemeBackend::reset()
     }
     impl_->haveInputEnd = false;
     impl_->inputEndSeconds = 0.0;
+    impl_->decoderStreamStartSeconds = 0.0;
+    impl_->emittedEndFrame = -1;
+    impl_->resampler.reset();
 #if defined(VOICE2VOCALSYNTH_WITH_POCKETSPHINX)
     if (impl_->decoder != nullptr) {
         if (impl_->utteranceStarted) {
@@ -234,6 +277,7 @@ PhonemeBackendResult PocketSphinxPhonemeBackend::process(
     const double frameDuration =
         static_cast<double>(frame.monoSamples.size()) / frame.sampleRateHz;
     const double frameEnd = frame.streamTimeStartSeconds + frameDuration;
+    const bool firstChunk = !impl_->haveInputEnd;
     std::size_t skip = 0;
     if (impl_->haveInputEnd) {
         const double overlapSeconds = impl_->inputEndSeconds - frame.streamTimeStartSeconds;
@@ -247,9 +291,13 @@ PhonemeBackendResult PocketSphinxPhonemeBackend::process(
     impl_->inputEndSeconds = std::max(impl_->inputEndSeconds, frameEnd);
 
     if (skip < frame.monoSamples.size()) {
-        const auto pcm = resampleTo16k(frame.monoSamples.data() + skip,
-                                       frame.monoSamples.size() - skip,
-                                       frame.sampleRateHz);
+        if (firstChunk) {
+            impl_->decoderStreamStartSeconds =
+                frame.streamTimeStartSeconds + static_cast<double>(skip) / frame.sampleRateHz;
+        }
+        const auto pcm = impl_->resampler.process(frame.monoSamples.data() + skip,
+                                                  frame.monoSamples.size() - skip,
+                                                  frame.sampleRateHz);
 #if defined(VOICE2VOCALSYNTH_WITH_POCKETSPHINX)
         if (!pcm.empty() &&
             ps_process_raw(impl_->decoder, pcm.data(), pcm.size(), 0, 0) < 0) {
@@ -260,23 +308,55 @@ PhonemeBackendResult PocketSphinxPhonemeBackend::process(
 #endif
     }
 
-    std::string currentPhone;
+    struct Segment
+    {
+        std::string phone;
+        int startFrame = 0;
+        int endFrame = 0;
+    };
+    std::vector<Segment> segments;
 #if defined(VOICE2VOCALSYNTH_WITH_POCKETSPHINX)
     for (ps_seg_t* segment = ps_seg_iter(impl_->decoder);
          segment != nullptr;
          segment = ps_seg_next(segment)) {
+        Segment item;
         if (const char* word = ps_seg_word(segment)) {
-            currentPhone = normalizePhone(word);
+            item.phone = normalizePhone(word);
         }
+        ps_seg_frames(segment, &item.startFrame, &item.endFrame);
+        segments.push_back(std::move(item));
     }
 #endif
 
-    PhonemeTemporalObservation observation;
-    observation.stream_time_seconds = frameEnd;
-    observation.arpabet = std::move(currentPhone);
-    observation.confidence =
-        observation.arpabet.empty() ? 0.0F : std::clamp(options_.commitmentConfidence, 0.0F, 1.0F);
-    result.observations.push_back(std::move(observation));
+    // The final partial segment may still be revised. Emit every newly completed
+    // segment before it, preserving PocketSphinx's 10 ms frame boundaries so
+    // short phones are not lost by the shell's slower UI timer.
+    for (std::size_t index = 0; index + 1 < segments.size(); ++index) {
+        const auto& segment = segments[index];
+        if (segment.endFrame <= impl_->emittedEndFrame) {
+            continue;
+        }
+        const int monotonicStartFrame =
+            std::max(segment.startFrame, impl_->emittedEndFrame + 1);
+        const double startSeconds =
+            impl_->decoderStreamStartSeconds + static_cast<double>(monotonicStartFrame) / 100.0;
+        const double endSeconds =
+            impl_->decoderStreamStartSeconds + static_cast<double>(segment.endFrame + 1) / 100.0;
+        if (!segment.phone.empty()) {
+            PhonemeFrame committed;
+            committed.arpabet = segment.phone;
+            committed.confidence =
+                std::clamp(options_.commitmentConfidence, 0.0F, 1.0F);
+            committed.estimatedOnsetSeconds = startSeconds;
+            committed.estimatedEndSeconds = endSeconds;
+            committed.isVowel =
+                PhonemeFallbackMapper::isArpabetVowel(committed.arpabet);
+            committed.isConsonant = !committed.isVowel;
+            committed.isVoiced = committed.isVowel;
+            result.committedFrames.push_back(std::move(committed));
+        }
+        impl_->emittedEndFrame = segment.endFrame;
+    }
     result.backendLatencyMs = std::chrono::duration<double, std::milli>(
                                   std::chrono::steady_clock::now() - started)
                                   .count();

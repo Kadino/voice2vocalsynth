@@ -30,6 +30,12 @@ The formal verification run must exercise the live path:
 4. The temporal stabilizer emits `ph_frame` JSON records.
 5. Post-run scoring consumes only those live log records.
 
+The playback manifest records a monotonic launch anchor for every clip (rather
+than relying only on nominal accumulated durations). This prevents ffmpeg
+process startup and teardown time from accumulating as cross-clip label drift;
+delivery/startup delay remains visible in the timing metrics instead of being
+silently subtracted.
+
 Offline steps are allowed only for setup and analysis:
 
 - downloading LibriSpeech `test-clean`;
@@ -187,6 +193,9 @@ The report must include latency metrics:
 Hard gate:
 
 - end-to-end latency must be <= 1000 ms.
+- a run without valid `ph_frame` decision-latency and backend-latency samples
+  fails closed. The end-to-end value includes P95 capture-to-commit decision
+  latency, not only device or loopback latency.
 
 Temporal correctness gate:
 

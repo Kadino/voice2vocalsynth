@@ -20,6 +20,8 @@ struct LibriSpeechPlaybackClip
     std::filesystem::path flacPath;
     double durationSeconds = 0.0;
     double startOffsetSeconds = 0.0;
+    /// Actual monotonic launch anchor recorded for this clip during playback.
+    std::int64_t playbackStartedSteadyNs = 0;
 };
 
 struct LibriSpeechPlaybackPlan

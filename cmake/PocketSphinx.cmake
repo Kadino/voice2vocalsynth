@@ -7,13 +7,15 @@ set(VOICE2VOCALSYNTH_POCKETSPHINX_MODEL_ROOT ""
 set(VOICE2VOCALSYNTH_POCKETSPHINX_AVAILABLE OFF)
 
 if(VOICE2VOCALSYNTH_WITH_POCKETSPHINX)
+    if(CMAKE_VERSION VERSION_LESS 3.25)
+        message(FATAL_ERROR
+            "PocketSphinx 5.1.1 requires CMake 3.25+. Upgrade CMake or configure "
+            "with -DVOICE2VOCALSYNTH_WITH_POCKETSPHINX=OFF.")
+    endif()
     include(FetchContent)
 
     # 5.1.1 is the first release containing the June 2026 model-loading
     # security fixes (CVE-2026-54559). Keep the archive hash pinned.
-    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-    set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
-    set(BUILD_GSTREAMER OFF CACHE BOOL "" FORCE)
     FetchContent_Declare(
         pocketsphinx_dependency
         URL https://github.com/cmusphinx/pocketsphinx/archive/refs/tags/v5.1.1.tar.gz
@@ -24,6 +26,8 @@ if(VOICE2VOCALSYNTH_WITH_POCKETSPHINX)
     # PocketSphinx 5.1.1 still uses CMAKE_SOURCE_DIR/CMAKE_BINARY_DIR for these
     # paths. Correct them when it is consumed with FetchContent.
     target_include_directories(pocketsphinx
+        PRIVATE
+            "${pocketsphinx_dependency_BINARY_DIR}"
         PUBLIC
             "${pocketsphinx_dependency_SOURCE_DIR}/include"
             "${pocketsphinx_dependency_BINARY_DIR}/include")
