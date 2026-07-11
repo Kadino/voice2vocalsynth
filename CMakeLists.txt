@@ -554,6 +554,22 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
     set_tests_properties(ScriptDryRunTests PROPERTIES
         ENVIRONMENT "VOICE2VOCALSYNTH_BUILD_DIR=${CMAKE_BINARY_DIR}")
 
+    add_test(
+        NAME LiveVerifyOrchestrationDryRunTests
+        COMMAND "${CMAKE_SOURCE_DIR}/tests/LiveVerifyOrchestrationDryRunTests.sh"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+    set_tests_properties(LiveVerifyOrchestrationDryRunTests PROPERTIES
+        ENVIRONMENT "VOICE2VOCALSYNTH_BUILD_DIR=${CMAKE_BINARY_DIR}")
+
+    add_executable(PhonemeFrameContractTests
+        tests/PhonemeFrameContractTests.cpp)
+
+    target_link_libraries(PhonemeFrameContractTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    add_test(NAME PhonemeFrameContractTests COMMAND PhonemeFrameContractTests)
+
     add_executable(WhistleDetectorTests
         tests/WhistleDetectorTests.cpp)
 
