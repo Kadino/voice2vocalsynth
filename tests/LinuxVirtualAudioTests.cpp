@@ -69,6 +69,38 @@ void detectsAlsaLoopbackRoute()
     assert(route->captureDevice == "plughw:0,1,0");
 }
 
+void rejectsMissingRecommendedSink()
+{
+    const auto route = detectPipeWireLoopbackRoute(readFixture("tests/fixtures/linux-audio/pactl_info.txt"),
+                                                   "Sink #0\n",
+                                                   readFixture("tests/fixtures/linux-audio/pactl_sources.txt"));
+    assert(!route);
+}
+
+void parsesInvalidCheckReport()
+{
+    const auto parsed = parseLinuxVirtualAudioCheckReport(
+        "{\"valid\": false, \"error\": \"fixture failure\"}");
+    assert(parsed.ok);
+    assert(!parsed.validation.valid);
+    assert(parsed.validation.error == "fixture failure");
+}
+
+void loadsManifestFileRoundTrip()
+{
+    const auto fixturePath = repositoryRoot() / "tests/fixtures/linux-audio/virtual_audio_manifest.json";
+    const auto loaded = loadLinuxVirtualAudioManifestFile(fixturePath);
+    assert(loaded.ok);
+    assert(loaded.info.route.routeId == "pipewire-loopback");
+    assert(loaded.info.route.captureDevice == "LivePhonemeVerify.monitor");
+    assert(loaded.info.route.playbackDevice == "LivePhonemeVerify");
+}
+
+void monitorSourceNameFollowsSink()
+{
+    assert(pactlMonitorSourceName("LivePhonemeVerify") == "LivePhonemeVerify.monitor");
+}
+
 void parsesCheckReportAndWritesManifest()
 {
     const auto parsed = parseLinuxVirtualAudioCheckReport(
@@ -101,6 +133,10 @@ int main()
     detectsPipeWireLoopbackRoute();
     parsesPactlDeviceNames();
     detectsAlsaLoopbackRoute();
+    rejectsMissingRecommendedSink();
+    parsesInvalidCheckReport();
+    loadsManifestFileRoundTrip();
+    monitorSourceNameFollowsSink();
     parsesCheckReportAndWritesManifest();
     std::cout << "LinuxVirtualAudio tests passed\n";
     return 0;
