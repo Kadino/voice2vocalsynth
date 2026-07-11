@@ -355,7 +355,7 @@ export LIVE_PHONEME_VERIFY_ROOT="${HOME}/.local/share/Voice2VocalSynth/LivePhone
 | pactl/parec | `pactl info && parec --help` | session + capture |
 | mfa | `mfa version` | present after `conda activate` |
 | JUCE app | `test -x "$VOICE2VOCALSYNTH_APP_BIN"` | executable |
-| CTest | `ctest --test-dir build -N` | 37 tests |
+| CTest | `ctest --test-dir build -N` | 41 tests |
 
 **Pass criteria:** all checks succeed; null sink exists when using the primary route.
 
@@ -596,9 +596,9 @@ Phase 0 Bootstrap
 
 ### Future hardening
 
-- Document and check `ripgrep` in orchestration script
-- Add `LibriSpeechPlaybackCliTests`, `MfaLabelCliTests`, `LinuxVirtualAudioCliTests`
-- Add `StreamingLiveRenderer` unit test with temp voicebank
-- Extend `LivePhonemeVerificationTests` for `latency_measure` and `onnx` log kinds
-- `run_live_phoneme_verify_linux.sh` should pass `-DVOICE2VOCALSYNTH_BUILD_JUCE_APP=ON` explicitly
+- [x] Document and check `ripgrep` in orchestration script
+- [x] Add `LibriSpeechPlaybackCliTests`, `MfaLabelCliTests`, `LinuxVirtualAudioCliTests`
+- [x] Add `StreamingLiveRenderer` unit test with temp voicebank
+- [x] Extend `LivePhonemeVerificationTests` for `latency_measure` and `onnx` log kinds
+- [x] `run_live_phoneme_verify_linux.sh` passes `-DVOICE2VOCALSYNTH_BUILD_JUCE_APP=ON` explicitly
 - Optional CI harness for `--dry-run` and fixture-based scorer only

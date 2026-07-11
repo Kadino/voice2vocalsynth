@@ -334,6 +334,54 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
 
     add_test(NAME LibriSpeechPlaybackTests COMMAND LibriSpeechPlaybackTests)
 
+    add_executable(LibriSpeechPlaybackCliTests
+        tests/LibriSpeechPlaybackCliTests.cpp)
+
+    target_link_libraries(LibriSpeechPlaybackCliTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    target_compile_definitions(LibriSpeechPlaybackCliTests
+        PRIVATE
+            "VOICE2VOCALSYNTH_REPOSITORY_ROOT=\"${_repo_root_slash}\"")
+
+    add_test(NAME LibriSpeechPlaybackCliTests COMMAND LibriSpeechPlaybackCliTests)
+
+    add_executable(MfaLabelCliTests
+        tests/MfaLabelCliTests.cpp)
+
+    target_link_libraries(MfaLabelCliTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    target_compile_definitions(MfaLabelCliTests
+        PRIVATE
+            "VOICE2VOCALSYNTH_REPOSITORY_ROOT=\"${_repo_root_slash}\"")
+
+    add_test(NAME MfaLabelCliTests COMMAND MfaLabelCliTests)
+
+    add_executable(LinuxVirtualAudioCliTests
+        tests/LinuxVirtualAudioCliTests.cpp)
+
+    target_link_libraries(LinuxVirtualAudioCliTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    target_compile_definitions(LinuxVirtualAudioCliTests
+        PRIVATE
+            "VOICE2VOCALSYNTH_REPOSITORY_ROOT=\"${_repo_root_slash}\"")
+
+    add_test(NAME LinuxVirtualAudioCliTests COMMAND LinuxVirtualAudioCliTests)
+
+    add_executable(StreamingLiveRendererTests
+        tests/StreamingLiveRendererTests.cpp)
+
+    target_link_libraries(StreamingLiveRendererTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    add_test(NAME StreamingLiveRendererTests COMMAND StreamingLiveRendererTests)
+
     add_executable(PhonemeBakeoffTests
         tests/PhonemeBakeoffTests.cpp)
 

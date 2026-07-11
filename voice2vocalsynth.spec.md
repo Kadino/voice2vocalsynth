@@ -550,7 +550,7 @@ livePhonemeVerification:
         - tool: Voice2VocalSynthApp
           path: build-juce/apps/juce-shell/Voice2VocalSynthApp_artefacts/Voice2VocalSynth
         - tool: ctest
-          expectation: 37 tests registered
+          expectation: 41 tests registered
     coverageGaps:
       notCoveredByCTest:
         - realTimeFfmpegPlaybackAt1x
@@ -709,11 +709,11 @@ livePhonemeVerification:
       - phase9_compare_backends
       - phase10_live_synthesis
     futureHardening:
-      - Document and check ripgrep dependency in orchestration script
-      - Add LibriSpeechPlaybackCliTests MfaLabelCliTests LinuxVirtualAudioCliTests
-      - Add StreamingLiveRenderer unit test with temp voicebank
-      - Extend LivePhonemeVerificationTests for latency_measure and onnx log kinds
-      - run_live_phoneme_verify_linux.sh should pass -DVOICE2VOCALSYNTH_BUILD_JUCE_APP=ON explicitly
+      - done: Document and check ripgrep dependency in orchestration script
+      - done: Add LibriSpeechPlaybackCliTests MfaLabelCliTests LinuxVirtualAudioCliTests
+      - done: Add StreamingLiveRenderer unit test with temp voicebank
+      - done: Extend LivePhonemeVerificationTests for latency_measure and onnx log kinds
+      - done: run_live_phoneme_verify_linux.sh passes -DVOICE2VOCALSYNTH_BUILD_JUCE_APP=ON explicitly
       - Optional CI harness for script --dry-run and fixture-based scorer only
 ---
 

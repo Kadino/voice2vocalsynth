@@ -91,9 +91,13 @@ if [[ "$(uname -s)" != "Linux" ]]; then
   echo "error: this workflow currently supports Linux only; Windows validation remains pending" >&2
   exit 1
 fi
+if ! command -v rg >/dev/null 2>&1; then
+  echo "error: ripgrep (rg) is required for live-log startup detection" >&2
+  exit 1
+fi
 
 mkdir -p "${BUILD_DIR}" "${VERIFY_ROOT}/runs"
-cmake -S "${REPO_ROOT}" -B "${BUILD_DIR}"
+cmake -S "${REPO_ROOT}" -B "${BUILD_DIR}" -DVOICE2VOCALSYNTH_BUILD_JUCE_APP=ON
 cmake --build "${BUILD_DIR}" \
   --target Voice2VocalSynthApp Voice2VocalSynthLivePhonemeVerify \
            Voice2VocalSynthLibriSpeechSetup Voice2VocalSynthMfaLabelConvert \
