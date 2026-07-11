@@ -550,13 +550,14 @@ livePhonemeVerification:
         - tool: Voice2VocalSynthApp
           path: build-juce/apps/juce-shell/Voice2VocalSynthApp_artefacts/Voice2VocalSynth
         - tool: ctest
-          expectation: 45 tests registered
+          expectation: 47 tests registered
     coverageGaps:
       notCoveredByCTest:
         - realTimeFfmpegPlaybackAt1x
         - liveVirtualAudioHostProbe
         - mfaAlignmentExecution
         - juceLiveRuntimeWiring
+          note: Phases 5–7 startup/log/scoring covered by Voice2VocalSynthLiveLogFixture and LiveLogFixtureHarnessTests; real JUCE audio callback path remains manual
         - streamingLiveRenderer
         - bashOrchestrationScripts
           note: Dry-run paths covered by ScriptDryRunTests and LiveVerifyOrchestrationDryRunTests; full live orchestration remains manual
@@ -722,6 +723,7 @@ livePhonemeVerification:
       - done: compare_live_phoneme_backends_linux.sh --dry-run covered by ScriptDryRunTests
       - done: PhonemeFrame outputStructSpec contract tests (PhonemeFrameContractTests)
       - done: Latency preset analysis-context range checks in LatencyBudgetTests
+      - done: Headless Voice2VocalSynthLiveLogFixture for phases 5–7 (LiveLogFixtureTests LiveLogFixtureHarnessTests)
 ---
 
 Voice2VocalSynth canonical project specification.

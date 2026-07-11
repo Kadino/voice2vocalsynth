@@ -258,7 +258,7 @@ Canonical machine-parseable form: [`voice2vocalsynth.spec.md`](../voice2vocalsyn
 
 This section is the human-readable companion for incrementally verifying every live-path
 piece in a local Linux development environment, including dependency bootstrap. It
-complements the 43 CTest targets (library logic and fixtures); it is **not** a CI job.
+complements the 47 CTest targets (library logic and fixtures); it is **not** a CI job.
 
 ### Principles
 
@@ -355,7 +355,7 @@ export LIVE_PHONEME_VERIFY_ROOT="${HOME}/.local/share/Voice2VocalSynth/LivePhone
 | pactl/parec | `pactl info && parec --help` | session + capture |
 | mfa | `mfa version` | present after `conda activate` |
 | JUCE app | `test -x "$VOICE2VOCALSYNTH_APP_BIN"` | executable |
-| CTest | `ctest --test-dir build -N` | 43 tests |
+| CTest | `ctest --test-dir build -N` | 47 tests |
 
 **Pass criteria:** all checks succeed; null sink exists when using the primary route.
 
@@ -590,7 +590,7 @@ Phase 0 Bootstrap
 | Real-time ffmpeg playback at 1.0x | Manual phases 4, 8 |
 | Live virtual-audio host probe | Manual phase 3 |
 | MFA alignment execution | Manual phase 2 |
-| JUCE live runtime wiring | Manual phases 5–6, 8 |
+| JUCE live runtime wiring | Phases 5–7 automated via `Voice2VocalSynthLiveLogFixture`; real audio callback path manual (phases 6, 8) |
 | `StreamingLiveRenderer` | Manual phase 10 |
 | Bash orchestration scripts | Manual phases 8–9 |
 
@@ -601,4 +601,5 @@ Phase 0 Bootstrap
 - [x] Add `StreamingLiveRenderer` unit test with temp voicebank
 - [x] Extend `LivePhonemeVerificationTests` for `latency_measure` and `onnx` log kinds
 - [x] `run_live_phoneme_verify_linux.sh` passes `-DVOICE2VOCALSYNTH_BUILD_JUCE_APP=ON` explicitly
-- Optional CI harness for `--dry-run` and fixture-based scorer only
+- [x] CI harness for `--dry-run` and fixture-based scorer (`ScriptDryRunTests`, `LiveLogFixtureHarnessTests`)
+- [x] Headless `Voice2VocalSynthLiveLogFixture` for phases 5–7 (`LiveLogFixtureTests`)

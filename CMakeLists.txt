@@ -31,6 +31,8 @@ add_library(Voice2VocalSynthCore
     src/LivePhonemeVerification.cpp
     src/LivePhonemeVerifyCli.cpp
     src/LivePhonemeVerifyPaths.cpp
+    src/LiveLogFixture.cpp
+    src/LiveLogFixtureCli.cpp
     src/LibriSpeechDataset.cpp
     src/LibriSpeechDatasetCli.cpp
     src/LibriSpeechPlayback.cpp
@@ -161,6 +163,13 @@ add_executable(Voice2VocalSynthLivePhonemeVerify
     apps/live-phoneme-verify/main.cpp)
 
 target_link_libraries(Voice2VocalSynthLivePhonemeVerify
+    PRIVATE
+        Voice2VocalSynthCore)
+
+add_executable(Voice2VocalSynthLiveLogFixture
+    apps/live-log-fixture/main.cpp)
+
+target_link_libraries(Voice2VocalSynthLiveLogFixture
     PRIVATE
         Voice2VocalSynthCore)
 
@@ -559,6 +568,26 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
         COMMAND "${CMAKE_SOURCE_DIR}/tests/LiveVerifyOrchestrationDryRunTests.sh"
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
     set_tests_properties(LiveVerifyOrchestrationDryRunTests PROPERTIES
+        ENVIRONMENT "VOICE2VOCALSYNTH_BUILD_DIR=${CMAKE_BINARY_DIR}")
+
+    add_executable(LiveLogFixtureTests
+        tests/LiveLogFixtureTests.cpp)
+
+    target_link_libraries(LiveLogFixtureTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    target_compile_definitions(LiveLogFixtureTests
+        PRIVATE
+            "VOICE2VOCALSYNTH_REPOSITORY_ROOT=\"${_repo_root_slash}\"")
+
+    add_test(NAME LiveLogFixtureTests COMMAND LiveLogFixtureTests)
+
+    add_test(
+        NAME LiveLogFixtureHarnessTests
+        COMMAND "${CMAKE_SOURCE_DIR}/tests/LiveLogFixtureHarnessTests.sh"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+    set_tests_properties(LiveLogFixtureHarnessTests PROPERTIES
         ENVIRONMENT "VOICE2VOCALSYNTH_BUILD_DIR=${CMAKE_BINARY_DIR}")
 
     add_executable(PhonemeFrameContractTests

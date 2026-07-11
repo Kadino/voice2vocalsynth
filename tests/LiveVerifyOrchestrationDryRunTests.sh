@@ -29,6 +29,7 @@ VERIFY_ROOT="${WORK_ROOT}/verify"
 DATASET_ROOT="${VERIFY_ROOT}/datasets/LibriSpeech/test-clean"
 RUN_DIR="${WORK_ROOT}/run"
 UTTERANCE_ID="1089-134686-0000"
+FIXTURE_APP="${BUILD_DIR}/Voice2VocalSynthLiveLogFixture"
 STUB_APP="${WORK_ROOT}/stub-voice2vocalsynth-app"
 
 cleanup() {
@@ -54,10 +55,16 @@ exit 0
 EOF
 chmod +x "${STUB_APP}"
 
+if [[ -x "${FIXTURE_APP}" ]]; then
+  APP_BIN="${FIXTURE_APP}"
+else
+  APP_BIN="${STUB_APP}"
+fi
+
 export LIVE_PHONEME_VERIFY_ROOT="${VERIFY_ROOT}"
 export LIBRISPEECH_TEST_CLEAN_ROOT="${DATASET_ROOT}"
 export VOICE2VOCALSYNTH_BUILD_DIR="${BUILD_DIR}"
-export VOICE2VOCALSYNTH_APP_BIN="${STUB_APP}"
+export VOICE2VOCALSYNTH_APP_BIN="${APP_BIN}"
 
 output="$("${SCRIPT_DIR}/run_live_phoneme_verify_linux.sh" \
   --skip-build \
