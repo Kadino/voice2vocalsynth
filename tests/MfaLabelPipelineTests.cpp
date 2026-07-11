@@ -124,6 +124,63 @@ void writesLabelManifest()
     std::filesystem::remove_all(root);
 }
 
+void rejectsMalformedTextGrid()
+{
+    const auto parsed = parseMfaPhonesTextGrid("not a textgrid");
+    assert(!parsed.ok);
+    assert(!parsed.error.empty());
+}
+
+void rejectsMissingPhonesTier()
+{
+    const std::string textGrid = R"(File type = "ooTextFile"
+Object class = "TextGrid"
+
+xmin = 0
+xmax = 0.5
+tiers? <exists>
+size = 1
+item []:
+    item [1]:
+        class = "IntervalTier"
+        name = "words"
+        xmin = 0
+        xmax = 0.5
+        intervals: size = 1
+        intervals [1]:
+            xmin = 0.0
+            xmax = 0.5
+            text = "hello"
+)";
+    const auto parsed = parseMfaPhonesTextGrid(textGrid);
+    assert(!parsed.ok);
+}
+
+void rejectsEmptyPhoneIntervals()
+{
+    const std::string textGrid = R"(File type = "ooTextFile"
+Object class = "TextGrid"
+
+xmin = 0
+xmax = 0.5
+tiers? <exists>
+size = 1
+item []:
+    item [1]:
+        class = "IntervalTier"
+        name = "phones"
+        xmin = 0
+        xmax = 0.5
+        intervals: size = 1
+        intervals [1]:
+            xmin = 0.0
+            xmax = 0.5
+            text = "sil"
+)";
+    const auto parsed = parseMfaPhonesTextGrid(textGrid);
+    assert(!parsed.ok);
+}
+
 } // namespace
 
 int main()
@@ -133,6 +190,9 @@ int main()
     convertsTextGridTree();
     listsUtterances();
     writesLabelManifest();
+    rejectsMalformedTextGrid();
+    rejectsMissingPhonesTier();
+    rejectsEmptyPhoneIntervals();
     std::cout << "MfaLabelPipeline tests passed\n";
     return 0;
 }

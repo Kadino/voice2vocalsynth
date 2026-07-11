@@ -538,6 +538,22 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
 
     add_test(NAME UtteranceSustainReleasePolicyTests COMMAND UtteranceSustainReleasePolicyTests)
 
+    add_executable(VadSustainPipelineTests
+        tests/VadSustainPipelineTests.cpp)
+
+    target_link_libraries(VadSustainPipelineTests
+        PRIVATE
+            Voice2VocalSynthCore)
+
+    add_test(NAME VadSustainPipelineTests COMMAND VadSustainPipelineTests)
+
+    add_test(
+        NAME ScriptDryRunTests
+        COMMAND "${CMAKE_SOURCE_DIR}/tests/ScriptDryRunTests.sh"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+    set_tests_properties(ScriptDryRunTests PROPERTIES
+        ENVIRONMENT "VOICE2VOCALSYNTH_BUILD_DIR=${CMAKE_BINARY_DIR}")
+
     add_executable(WhistleDetectorTests
         tests/WhistleDetectorTests.cpp)
 

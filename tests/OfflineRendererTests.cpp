@@ -286,6 +286,48 @@ void offlineRendererPitchUpLoopsSustainWithoutTruncationWarning()
     assert(energy > 12.0f);
 }
 
+void offlineRendererTruncatesAtPerceivedUtteranceEnd()
+{
+    const auto dir = std::filesystem::temp_directory_path() / "v2vs_offline_sustain_release";
+    std::filesystem::create_directories(dir);
+    const auto wav = dir / "sustain.wav";
+    constexpr int kSr = 1000;
+    constexpr int kSamples = 1000;
+    std::vector<std::int16_t> samples(static_cast<std::size_t>(kSamples), 8000);
+    writePcmWavMono(wav, kSr, samples);
+
+    RenderPlan plan;
+    RenderEvent ev;
+    ev.alias = "s";
+    ev.wavFile = "sustain.wav";
+    ev.startTimeSeconds = 0.0;
+    ev.durationMs = 1000.0;
+    ev.otoTiming.offsetMs = 0.0;
+    ev.otoTiming.cutoffMs = 0.0;
+    ev.perceivedUtteranceEndSeconds = 0.25;
+    plan.events.push_back(ev);
+
+    OfflineRenderOptions opts;
+    opts.voicebankRoot = dir;
+    opts.outputSampleRate = kSr;
+
+    const auto rendered = OfflineRenderer::render(plan, opts);
+    assert(rendered.ok);
+    assert(rendered.warnings.empty());
+    assert(rendered.mono.size() == 1000);
+
+    float earlyEnergy = 0.0f;
+    float lateEnergy = 0.0f;
+    for (std::size_t i = 0; i < 250; ++i) {
+        earlyEnergy += std::fabs(rendered.mono[i]);
+    }
+    for (std::size_t i = 250; i < rendered.mono.size(); ++i) {
+        lateEnergy += std::fabs(rendered.mono[i]);
+    }
+    assert(earlyEnergy > 1.0f);
+    assert(lateEnergy < 0.001f);
+}
+
 void offlineRendererSkipsMissingWavWithWarning()
 {
     RenderPlan plan;
@@ -314,6 +356,7 @@ int main()
     offlineRendererOverlapCrossfadesIntoPreviousNote();
     offlineRendererAppliesPitchShiftAgainstSourceRecordingPitch();
     offlineRendererPitchUpLoopsSustainWithoutTruncationWarning();
+    offlineRendererTruncatesAtPerceivedUtteranceEnd();
     pcmWavWriterRoundTrip();
     offlineRendererSkipsMissingWavWithWarning();
     return 0;
