@@ -730,6 +730,205 @@ livePhonemeVerification:
       - done: Latency preset analysis-context range checks in LatencyBudgetTests
       - done: Extend partiallyCovered gaps (dataset validation negatives, MFA self-compare F1, virtual-audio fixture edges, scorer CLI exit codes, stabilizer hysteresis)
       - done: Headless Voice2VocalSynthLiveLogFixture for phases 5–7 (LiveLogFixtureTests LiveLogFixtureHarnessTests)
+functionalityGaps:
+  lastReviewed: 2026-07-12
+  context: >-
+    Local Linux verification infrastructure is stable: 47 CTest targets pass, live
+    phoneme verification scripts and backend comparison run end-to-end. Remaining
+    work is product capability and detection quality, not verification plumbing.
+  phonemeDetectionAccuracy:
+    summary: >-
+      No backend yet delivers production-grade live ARPABET phoneme accuracy. Spec
+      design preference remains onnx_based_streaming_phoneme_model (Milestone 7 open).
+    backends:
+      - id: placeholder_pitch_gate
+        shellName: placeholder
+        status: debug_only
+        cannotPassLiveGates: true
+        behavior: Voiced pitch maps to AH; otherwise silence. No phoneme discrimination.
+      - id: phoneme_onnx
+        shellName: onnx_phoneme
+        status: adapter_only
+        cannotPassLiveGates: true
+        behavior: >-
+          PhonemeOnnxBackend and async runner exist, but the in-repo fixture is a
+          dummy Identity ONNX for plumbing smoke tests only. A real trained streaming
+          ARPABET model must be supplied externally; none is integrated or shipped.
+      - id: pocketsphinx_allphone
+        shellName: pocketsphinx
+        status: baseline_candidate
+        cannotPassLiveGates: false
+        behavior: >-
+          PocketSphinx 5.1.1 US-English all-phone HMM decoder. True incremental
+          decoder emitting unstressed CMU ARPABET. No acoustic posteriors for partial
+          hypotheses; reports documented commitment confidence, not model posterior.
+          Default backend in run_live_phoneme_verify_linux.sh. Baseline candidate, not
+          presumed quality winner.
+    noTrueStreamingOnnxModelNote: >-
+      No permissively licensed, pretrained, true-streaming English phoneme ONNX model
+      was available when PocketSphinx was selected. Windowed Wav2Vec2/WavLM CTC models
+      may be compared as windowed ONNX candidates but must not be described as true
+      streaming.
+    stabilizerGaps:
+      implementedV1:
+        - confidenceThresholds
+        - minimumPhonemeDuration
+        - hysteresis
+      missingFromSpec:
+        - onsetCorrection
+        - plosiveBurstDetection
+        - fricativeHoldDetection
+        - vowelSustainDetection
+        - fallbackSubstitutionLogic
+      note: >-
+        Even a better raw backend is capped by the generic v1 stabilizer until
+        phoneme-class-specific rules land.
+    verificationGates:
+      status: provisional_loose
+      note: >-
+        Deliberately loose first-run thresholds in run_live_phoneme_verify_linux.sh;
+        tighten after reviewing MFA label noise. Low bar proves live path is scorable,
+        not that detection is good enough for intelligible synthesis.
+      defaults:
+        minF1: 0.20
+        maxMissedConsonantRate: 0.85
+        maxMeanOnsetErrorMs: 150
+        maxP95OnsetErrorMs: 300
+        maxMeanEndErrorMs: 200
+        maxP95EndErrorMs: 350
+        maxMeanDurationErrorMs: 250
+        maxE2eLatencyMs: 1000
+      envOverrides:
+        - LIVE_VERIFY_MIN_F1
+        - LIVE_VERIFY_MAX_MISSED_CONSONANT_RATE
+        - LIVE_VERIFY_MAX_MEAN_ONSET_MS
+        - LIVE_VERIFY_MAX_P95_ONSET_MS
+        - LIVE_VERIFY_MAX_MEAN_END_MS
+        - LIVE_VERIFY_MAX_P95_END_MS
+        - LIVE_VERIFY_MAX_MEAN_DURATION_MS
+        - LIVE_VERIFY_MAX_E2E_MS
+    referenceLabelUncertainty: >-
+      MFA-aligned LibriSpeech labels are the scoring reference; temporal metrics may
+      partly reflect alignment noise, not only detector error.
+    offlineBakeoffNotFormalVerification: >-
+      Voice2VocalSynthPhonemeBakeoff and direct WAV-to-backend inference may rank
+      candidates cheaply, but formal live verification accepts only JUCE live
+      ph_frame records.
+  signalPipeline:
+    implemented:
+      - microphoneInput
+      - ringBuffer
+      - pitchDetector
+      - whistleDetector
+      - temporalStabilizer
+      - englishArpabetPhonemes
+      - arpabetToJapaneseMapping
+      - utauLookup
+      - voicebankRenderer
+      - pitchCorrection
+      - audioOutput
+    gaps:
+      - id: phonemeDetector
+        status: no_production_model
+        note: See phonemeDetectionAccuracy.backends.
+      - id: onsetTransitionDetector
+        status: not_implemented
+      - id: inputGainNoiseGateVad
+        status: vad_only
+        note: >-
+          VoiceActivityDetector energy VAD exists; dedicated input gain stage and
+          noise gate threshold (presets.detection.noiseGateThreshold) not implemented.
+  synthesisAndMapping:
+    gaps:
+      - id: liveSynthesisIntelligibility
+        status: manually_validated
+        note: >-
+          StreamingLiveRenderer wired in JUCE shell; phase10_live_synthesis remains
+          manual. Unit tests cover scheduling; audible quality unproven.
+      - id: rendererQuality
+        status: naive_resample_only
+        note: >-
+          OfflineRenderer and StreamingLiveRenderer use naive linear resampling and
+          oto timing. WORLD vocoder (rendererPlan.higherQualityRenderer) planned, not
+          built.
+      - id: voicebankCvcCvvccCvvc
+        status: deferred
+        note: >-
+          Japanese CV plus prefix/suffix maps and partial trailing-CVC fallback exist;
+          full CVC/CVVCC/CVVC banks deferred (utauVoicebankSupport.later).
+      - id: mappingApproximation
+        status: inherent_limit
+        note: English ARPABET does not map perfectly to Japanese CV per spec.
+  pitchBehavior:
+    implemented:
+      - raw_pitch_follow
+      - nearest_note_snap
+      - key_scale_snap
+      - fixed_default_pitch
+      - whistle_pitch_mode
+      - lowConfidenceFallback
+    gaps:
+      - id: tuningTables
+        status: not_implemented
+        note: >-
+          pitchBehavior.temperament.implementationPreference is tuningTablesSupported;
+          v1 uses twelve_tone_equal_temperament only.
+      - id: avoidStrongPitchShiftOnNoisyConsonants
+        status: not_implemented
+        note: answer_unvoicedConsonantsAndPitch.rendererAvoidStrongPitchShiftOnNoisyConsonants
+      - id: unvoicedConsonantPitchCoordination
+        status: partial
+        note: >-
+          RecentPitchTracker low-confidence fallback exists; full consonant/vowel pitch
+          coordination layer per spec not explicit in renderer.
+  platformProductUx:
+    gaps:
+      - id: windowsLiveVerification
+        status: not_done
+        note: >-
+          Primary target platform is Windows; full live phoneme verification plan not
+          re-run on Windows (livePhonemeVerification handoffDoc checklist open).
+      - id: projectOwnedVirtualMicrophone
+        status: deferred
+        note: decisions.virtualMicrophone; prototype uses monitor or existing virtual cable.
+      - id: calibrationSetupFlow
+        status: not_implemented
+        note: calibrationSetupFlow steps (noise floor, vowel/plosive checks, fallback report).
+      - id: sessionDebugRecording
+        status: partial
+        note: >-
+          JSONL live log exists; dataStorage.recordingDebugFormat CSV/session writer
+          and phonemes.csv deferred (live-pipeline-roadmap Milestone 2 open).
+      - id: debugUiSurfaces
+        status: partial
+        note: >-
+          presets.debug fields (showPhonemeTimeline, recordInput, recordRenderedOutput)
+          exist in AppSettings; full shell UI not evident.
+      - id: voicebankBundling
+        status: do_not_bundle
+        note: decisions.momoneMomoChibi2009Bundling; user must supply local voicebank copy.
+  provenByStableLocalTesting:
+    - LibriSpeech test-clean download manifest and MFA label pipeline
+    - Linux virtual audio validation and real-time ffmpeg playback at 1.0x
+    - JUCE capture path to ph_frame JSONL and post-capture scoring
+    - Backend switching comparison scripts and latency timing metrics
+    - Forty-seven CTest targets covering core library and CLI fixtures
+  notYetProven:
+    - Phoneme accuracy sufficient for intelligible live UTAU output
+    - Windows behavior with WASAPI ASIO real mic and virtual cable routing
+    - Any backend consistently passing tightened non-provisional quality gates
+    - End-user calibration recording workflows and production renderer quality
+  suggestedPriority:
+    - id: integrate_real_streaming_arpabet_onnx
+      label: Integrate or train real streaming ARPABET ONNX model; re-run live verification with tightened gates
+    - id: extend_temporal_stabilizer
+      label: Add phoneme-class-specific stabilizer rules (onset correction, plosive/fricative handling)
+    - id: windows_live_validation
+      label: Repeat live phoneme verification on Windows target platform
+    - id: live_synthesis_polish
+      label: Renderer quality (WORLD or equivalent) and missing-alias handling under real phoneme streams
+    - id: product_surfaces
+      label: Calibration flow, session recording, phoneme timeline UI, noise gate and input gain
 ---
 
 Voice2VocalSynth canonical project specification.
@@ -737,3 +936,4 @@ Voice2VocalSynth canonical project specification.
 - The YAML frontmatter above is the **source of truth for agents/tools**.
 - The body of this document is intentionally minimal; update the YAML when requirements change.
 - Linux live-path local testing plan: `livePhonemeVerification.localTestingPlan` in frontmatter; narrative in `docs/live-phoneme-verification-plan.md#local-environment-testing-plan`.
+- Functionality gaps (post-stable local testing): `functionalityGaps` in frontmatter; update `lastReviewed` when rescoping.
