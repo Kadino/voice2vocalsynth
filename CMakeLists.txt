@@ -570,6 +570,13 @@ if(VOICE2VOCALSYNTH_BUILD_TESTS)
     set_tests_properties(LiveVerifyOrchestrationDryRunTests PROPERTIES
         ENVIRONMENT "VOICE2VOCALSYNTH_BUILD_DIR=${CMAKE_BINARY_DIR}")
 
+    add_test(
+        NAME PhonemeBakeoffMatrixVerifyTests
+        COMMAND "${CMAKE_SOURCE_DIR}/tests/PhonemeBakeoffMatrixVerifyTests.sh"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+    set_tests_properties(PhonemeBakeoffMatrixVerifyTests PROPERTIES
+        ENVIRONMENT "VOICE2VOCALSYNTH_BUILD_DIR=${CMAKE_BINARY_DIR}")
+
     add_executable(LiveLogFixtureTests
         tests/LiveLogFixtureTests.cpp)
 

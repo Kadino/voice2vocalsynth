@@ -28,6 +28,7 @@ struct PhonemeBakeoffCliOptions
     std::vector<std::string> backendNames;
     std::optional<std::filesystem::path> onnxModelPath;
     std::optional<std::filesystem::path> onnxConfigPath;
+    std::optional<std::filesystem::path> pocketSphinxModelRoot;
     std::optional<std::filesystem::path> outputPath;
     bool allClips = false;
     PhonemeEvaluationOptions evalOptions;
