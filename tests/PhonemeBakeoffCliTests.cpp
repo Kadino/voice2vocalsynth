@@ -54,6 +54,26 @@ void rejectsAllClipsWithoutEvalData()
     assert(!error.empty());
 }
 
+void parsesPocketsphinxModelRoot()
+{
+    std::string error;
+    const auto options = parsePhonemeBakeoffCliArgs(
+        {"Voice2VocalSynthPhonemeBakeoff",
+         "--reference",
+         "/tmp/ref.json",
+         "--audio",
+         "/tmp/audio.wav",
+         "--backends",
+         "pocketsphinx",
+         "--pocketsphinx-model-root",
+         "/tmp/model"},
+        error);
+    assert(options);
+    assert(options->pocketSphinxModelRoot == "/tmp/model");
+    assert(options->backendNames.size() == 1);
+    assert(options->backendNames[0] == "pocketsphinx");
+}
+
 } // namespace
 
 int main()
@@ -61,6 +81,7 @@ int main()
     parsesEvalDataClipArguments();
     parsesAllClipsArguments();
     rejectsAllClipsWithoutEvalData();
+    parsesPocketsphinxModelRoot();
     std::cout << "PhonemeBakeoffCli tests passed\n";
     return 0;
 }

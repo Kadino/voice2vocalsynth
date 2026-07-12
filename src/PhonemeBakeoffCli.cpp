@@ -2,6 +2,9 @@
 
 #include "Voice2VocalSynth/PcmWavReader.h"
 #include "Voice2VocalSynth/PhonemeBackend.h"
+#if defined(VOICE2VOCALSYNTH_WITH_POCKETSPHINX)
+#include "Voice2VocalSynth/PocketSphinxPhonemeBackend.h"
+#endif
 
 #include <cctype>
 #include <fstream>
@@ -66,7 +69,23 @@ void appendBackend(std::vector<std::unique_ptr<IPhonemeBackend>>& backends,
         backends.push_back(std::make_unique<PlaceholderPitchPhonemeBackend>());
         return;
     }
-    if (name == "onnx") {
+#if defined(VOICE2VOCALSYNTH_WITH_POCKETSPHINX)
+    if (name == "pocketsphinx") {
+        PocketSphinxPhonemeBackendOptions pocketOptions;
+        if (options.pocketSphinxModelRoot) {
+            pocketOptions.modelRoot = *options.pocketSphinxModelRoot;
+        }
+        auto backend = std::make_unique<PocketSphinxPhonemeBackend>(std::move(pocketOptions));
+        std::string loadError;
+        if (!backend->load(loadError)) {
+            error = loadError;
+            return;
+        }
+        backends.push_back(std::move(backend));
+        return;
+    }
+#endif
+    if (name == "onnx" || name == "onnx_phoneme") {
         if (!options.onnxModelPath) {
             error = "Backend onnx requires --onnx-model";
             return;
@@ -195,9 +214,10 @@ std::string phonemeBakeoffCliUsage()
 {
     return "Voice2VocalSynthPhonemeBakeoff "
            "--reference <labels.json> --audio <clip.wav> "
-           "[--backends placeholder,onnx] "
+           "[--backends placeholder,pocketsphinx,onnx|onnx_phoneme] "
            "[--eval-data <EvalDataRoot> --clip <basename> | --all-clips] "
            "[--onnx-model <model.onnx> --onnx-config <model.phoneme.json>] "
+           "[--pocketsphinx-model-root <path>] "
            "[--out <report.json>] "
            "[--max-onset-error-ms <ms>] [--min-overlap-ms <ms>]";
 }
@@ -277,6 +297,14 @@ std::optional<PhonemeBakeoffCliOptions> parsePhonemeBakeoffCliArgs(
                 return std::nullopt;
             }
             options.onnxConfigPath = args[++index];
+            continue;
+        }
+        if (arg == "--pocketsphinx-model-root") {
+            if (index + 1 >= args.size()) {
+                error = "Missing value for --pocketsphinx-model-root";
+                return std::nullopt;
+            }
+            options.pocketSphinxModelRoot = args[++index];
             continue;
         }
         if (arg == "--out") {
