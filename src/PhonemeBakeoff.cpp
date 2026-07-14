@@ -60,6 +60,53 @@ PhonemeFrame phonemeObservationToFrame(const PhonemeTemporalObservation& observa
     return frame;
 }
 
+namespace
+{
+
+void ingestBackendResult(PhonemeBackendPipelineResult& result,
+                         PhonemeTemporalStabilizer& stabilizer,
+                         const PhonemeBackendResult& backendResult,
+                         const double segmentSeconds,
+                         const bool feedStabilizer)
+{
+    if (backendResult.backendLatencyMs > 0.0) {
+        result.backendLatenciesMs.push_back(backendResult.backendLatencyMs);
+    }
+
+    for (const auto& observation : backendResult.observations) {
+        if (!observation.arpabet.empty()) {
+            result.rawFrames.push_back(phonemeObservationToFrame(observation, segmentSeconds));
+        }
+        if (feedStabilizer) {
+            stabilizer.observe(observation);
+        }
+    }
+
+    for (const auto& committed : backendResult.committedFrames) {
+        result.rawFrames.push_back(committed);
+        result.stabilizedFrames.push_back(committed);
+    }
+}
+
+[[nodiscard]] bool processBackendFrame(IPhonemeBackend& backend,
+                                       PhonemeBackendPipelineResult& result,
+                                       PhonemeTemporalStabilizer& stabilizer,
+                                       const PhonemeBackendAudioFrame& frame,
+                                       const double segmentSeconds,
+                                       std::string& error,
+                                       const bool feedStabilizer = true)
+{
+    const auto backendResult = backend.process(frame);
+    if (!backendResult.ok) {
+        error = backendResult.error;
+        return false;
+    }
+    ingestBackendResult(result, stabilizer, backendResult, segmentSeconds, feedStabilizer);
+    return true;
+}
+
+} // namespace
+
 PhonemeBackendPipelineResult runPhonemeBackendOnMono(
     IPhonemeBackend& backend,
     const std::vector<float>& mono,
@@ -78,6 +125,7 @@ PhonemeBackendPipelineResult runPhonemeBackendOnMono(
     const auto windowSamples = windowSamplesForBackend(descriptor, sampleRateHz);
     const auto hopSamples = hopSamplesForBackend(descriptor, sampleRateHz);
     const double segmentSeconds = static_cast<double>(windowSamples) / sampleRateHz;
+    const double streamEndSeconds = static_cast<double>(mono.size()) / sampleRateHz;
 
     PhonemeTemporalStabilizer stabilizer(stabilizerOptions);
     for (std::size_t start = 0; start + windowSamples <= mono.size(); start += hopSamples) {
@@ -87,26 +135,41 @@ PhonemeBackendPipelineResult runPhonemeBackendOnMono(
         frame.monoSamples.assign(mono.begin() + static_cast<std::ptrdiff_t>(start),
                                  mono.begin() + static_cast<std::ptrdiff_t>(start + windowSamples));
 
-        const auto backendResult = backend.process(frame);
-        if (!backendResult.ok) {
-            result.error = backendResult.error;
+        if (!processBackendFrame(backend, result, stabilizer, frame, segmentSeconds, result.error)) {
             return result;
         }
-        if (backendResult.backendLatencyMs > 0.0) {
-            result.backendLatenciesMs.push_back(backendResult.backendLatencyMs);
-        }
-
-        for (const auto& observation : backendResult.observations) {
-            if (!observation.arpabet.empty()) {
-                result.rawFrames.push_back(phonemeObservationToFrame(observation, segmentSeconds));
-            }
-            stabilizer.observe(observation);
-        }
     }
+
+    PhonemeTemporalObservation silence;
+    silence.arpabet = "";
+    silence.confidence = 0.0F;
+    silence.stream_time_seconds = streamEndSeconds + 0.001;
+    stabilizer.observe(silence);
+    silence.stream_time_seconds =
+        streamEndSeconds + stabilizerOptions.silence_finalize_seconds + 0.002;
+    stabilizer.observe(silence);
 
     PhonemeFrame committed;
     while (stabilizer.try_pop_committed(committed)) {
         result.stabilizedFrames.push_back(std::move(committed));
+    }
+
+    PhonemeBackendAudioFrame flushFrame;
+    flushFrame.sampleRateHz = sampleRateHz;
+    flushFrame.streamTimeStartSeconds = streamEndSeconds;
+    flushFrame.monoSamples.assign(windowSamples, 0.0F);
+    for (int flushIndex = 0; flushIndex < 2; ++flushIndex) {
+        flushFrame.streamTimeStartSeconds =
+            streamEndSeconds + static_cast<double>(flushIndex * hopSamples) / sampleRateHz;
+        if (!processBackendFrame(backend,
+                                 result,
+                                 stabilizer,
+                                 flushFrame,
+                                 segmentSeconds,
+                                 result.error,
+                                 false)) {
+            return result;
+        }
     }
 
     result.meanBackendLatencyMs = meanValue(result.backendLatenciesMs);
